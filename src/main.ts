@@ -93,7 +93,7 @@ program
   .description("List all tracked URLs")
   .action(async () => {
     const { config } = await loadConfig(program.opts().config);
-    listCommand(config);
+    await listCommand(config);
   });
 
 program.parse();

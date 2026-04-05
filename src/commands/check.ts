@@ -4,6 +4,7 @@ import type { Config, UrlEntry } from "../config/schema.ts";
 import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
 import { getConverter } from "../converters/registry.ts";
+import { loadState, saveState } from "../state.ts";
 import {
   isGitRepo,
   isClean,
@@ -61,7 +62,22 @@ export async function checkCommand(
     }
   }
 
+  // Update state: lastChecked for all processed URLs
+  const now = new Date().toISOString();
+  const state = await loadState(dataDir);
+  for (const r of results) {
+    if (!r.error) {
+      state[r.alias] = { ...state[r.alias], lastChecked: now };
+    }
+  }
+
   if (writtenFiles.length === 0) {
+    await saveState(dataDir, state);
+    await gitAdd(dataDir, [".state.yaml"]);
+    await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
+      // No changes to commit (state unchanged) — that's fine
+      gitResetHead(dataDir);
+    });
     return results;
   }
 
@@ -73,17 +89,23 @@ export async function checkCommand(
   });
   await gitAdd(dataDir, filenames);
 
-  // Check for actual changes
+  // Check for actual data changes (before staging state)
   const stat = await gitDiffCachedStat(dataDir);
   if (!stat.trim()) {
     await gitResetHead(dataDir);
     for (const r of results) {
       if (!r.error) r.changed = false;
     }
+    // Still save state (lastChecked updated)
+    await saveState(dataDir, state);
+    await gitAdd(dataDir, [".state.yaml"]);
+    await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
+      gitResetHead(dataDir);
+    });
     return results;
   }
 
-  // Get the full diff
+  // Get the full diff (before staging state, so .state.yaml isn't in it)
   const fullDiff = await gitDiffCached(dataDir);
 
   // Parse which files changed from the stat output
@@ -94,19 +116,26 @@ export async function checkCommand(
       .map((line) => line.trim().split(/\s+/)[0]!)
   );
 
-  // Update results with change info
+  // Update results with change info and state
   for (const r of results) {
     if (r.error) continue;
     const ext = getFileExtension(r.alias, config);
     const filename = `${r.alias}.${ext}`;
     r.changed = changedFiles.has(filename);
+    if (r.changed) {
+      state[r.alias]!.lastChanged = now;
+    }
   }
+
+  // Save state and stage it alongside data
+  await saveState(dataDir, state);
+  await gitAdd(dataDir, [".state.yaml"]);
 
   // Commit
   const changedAliases = results
     .filter((r) => r.changed)
     .map((r) => r.alias);
-  const timestamp = new Date().toISOString();
+  const timestamp = now;
   const message = `urlwatcher: Update ${changedAliases.join(", ")} — ${timestamp}`;
   const commitHash = await gitCommit(dataDir, message);
 
