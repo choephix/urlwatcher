@@ -2,6 +2,7 @@ export interface ChangeReport {
   alias: string;
   url: string;
   diff: string;
+  isNew: boolean;
   commitHash: string;
   timestamp: Date;
 }

@@ -11,6 +11,7 @@ export interface CheckResult {
   alias: string;
   url: string;
   changed: boolean;
+  isNew?: boolean;
   diff?: string;
   error?: string;
 }

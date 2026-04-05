@@ -7,5 +7,7 @@ urls:
   - alias: github-octocat
     url: https://api.github.com/users/octocat
     contentType: json
+  - alias: example
+    url: https://example.com
 notifications:
   - type: stdout

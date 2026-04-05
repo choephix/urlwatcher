@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 import type { Config, UrlEntry } from "../config/schema.ts";
 import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
@@ -134,6 +135,11 @@ async function processUrl(
     const timeout = entry.timeout ?? config.defaults.timeout;
     const type = entry.contentType;
 
+    // Check if this is a first-time fetch
+    const ext = type === "json" ? "yaml" : "md";
+    const filePath = resolve(dataDir, `${entry.alias}.${ext}`);
+    result.isNew = !existsSync(filePath);
+
     let converterName: string;
     let body = "";
     let contentType = "";
@@ -163,15 +169,15 @@ async function processUrl(
           converterName = entry.jsonConverter ?? config.defaults.jsonConverter;
           const jsonConverter = getConverter(converterName);
           const converted = await jsonConverter.convert(entry.url, body, contentType);
-          const filePath = resolve(dataDir, `${entry.alias}.${converted.extension}`);
-          await Bun.write(filePath, converted.content);
+          const outPath = resolve(dataDir, `${entry.alias}.${converted.extension}`);
+          result.isNew = !existsSync(outPath);
+          await Bun.write(outPath, converted.content);
           return result;
         }
       }
     }
 
     const converted = await converter.convert(entry.url, body, contentType);
-    const filePath = resolve(dataDir, `${entry.alias}.${converted.extension}`);
     await Bun.write(filePath, converted.content);
 
     return result;
@@ -195,14 +201,20 @@ function extractFileDiff(fullDiff: string, alias: string): string {
 
   for (const line of lines) {
     if (line.startsWith("diff --git")) {
-      if (line.includes(`/${alias}.`)) {
-        capturing = true;
-      } else {
-        capturing = false;
-      }
+      capturing = line.includes(`/${alias}.`);
+      continue;
     }
-    if (capturing) chunks.push(line);
+    if (!capturing) continue;
+    // Strip git metadata lines
+    if (
+      line.startsWith("index ") ||
+      line.startsWith("--- ") ||
+      line.startsWith("+++ ") ||
+      line.startsWith("new file mode") ||
+      line.startsWith("\\ No newline")
+    ) continue;
+    chunks.push(line);
   }
 
-  return chunks.join("\n");
+  return chunks.join("\n").trim();
 }

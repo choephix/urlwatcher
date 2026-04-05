@@ -6,7 +6,11 @@ const stdoutNotifier: NotificationPlugin = {
 
   async notify(report) {
     console.log(`\n--- ${report.alias} (${report.url}) ---`);
-    console.log(report.diff);
+    if (report.isNew) {
+      console.log("New: first snapshot saved");
+    } else {
+      console.log(report.diff);
+    }
   },
 
   async notifyError(alias, url, error) {

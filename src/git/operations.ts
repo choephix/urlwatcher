@@ -22,7 +22,10 @@ async function runGit(cwd: string, args: string[]): Promise<GitResult> {
 
 export async function isGitRepo(dataDir: string): Promise<boolean> {
   const result = await runGit(dataDir, ["rev-parse", "--git-dir"]);
-  return result.exitCode === 0;
+  if (result.exitCode !== 0) return false;
+  // Ensure the .git dir belongs to this directory, not a parent repo
+  const gitDir = result.stdout.trim();
+  return gitDir === ".git";
 }
 
 export async function gitInit(dataDir: string): Promise<void> {
@@ -44,7 +47,7 @@ export async function gitAdd(dataDir: string, files: string[]): Promise<void> {
 }
 
 export async function gitDiffCached(dataDir: string): Promise<string> {
-  const result = await runGit(dataDir, ["diff", "--cached"]);
+  const result = await runGit(dataDir, ["diff", "--cached", "--word-diff=plain"]);
   return result.stdout;
 }
 

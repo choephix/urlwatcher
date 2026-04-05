@@ -46,6 +46,7 @@ program
           alias: r.alias,
           url: r.url,
           diff: r.diff ?? "",
+          isNew: r.isNew ?? false,
           commitHash: "",
           timestamp: new Date(),
         });
