@@ -1,0 +1,11 @@
+dataDir: ./data
+defaults:
+  htmlConverter: turndown
+  jsonConverter: yaml
+  timeout: 30000
+urls:
+  - alias: github-octocat
+    url: https://api.github.com/users/octocat
+    contentType: json
+notifications:
+  - type: stdout

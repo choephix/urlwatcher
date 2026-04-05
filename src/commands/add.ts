@@ -1,0 +1,36 @@
+import { addUrlToConfig } from "../config/writer.ts";
+import { listConverters } from "../converters/registry.ts";
+
+// Ensure converters are registered
+import "../converters/yaml-converter.ts";
+import "../converters/turndown.ts";
+import "../converters/jina.ts";
+
+export async function addCommand(
+  configPath: string,
+  url: string,
+  options: { alias: string; htmlConverter?: string; contentType?: string }
+): Promise<void> {
+  if (options.htmlConverter) {
+    const available = listConverters().map((c) => c.name);
+    if (!available.includes(options.htmlConverter)) {
+      throw new Error(
+        `Unknown converter "${options.htmlConverter}". Available: ${available.join(", ")}`
+      );
+    }
+  }
+
+  const contentType =
+    options.contentType === "html" || options.contentType === "json"
+      ? options.contentType
+      : undefined;
+
+  await addUrlToConfig(configPath, {
+    alias: options.alias,
+    url,
+    htmlConverter: options.htmlConverter,
+    contentType,
+  });
+
+  console.log(`Added "${options.alias}" → ${url}`);
+}

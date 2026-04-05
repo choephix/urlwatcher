@@ -1,0 +1,22 @@
+{
+  "name": "urlwatcher",
+  "type": "module",
+  "bin": {
+    "urlwatcher": "./src/main.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/turndown": "^5.0.6"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "commander": "^14.0.3",
+    "linkedom": "^0.18.12",
+    "turndown": "^7.2.4",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  }
+}
