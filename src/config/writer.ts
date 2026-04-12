@@ -1,15 +1,16 @@
-import { parse, stringify } from "yaml";
+import { parseDocument } from "yaml";
 
 export async function addUrlToConfig(
   configPath: string,
   entry: { alias: string; url: string; htmlConverter?: string; contentType?: "html" | "json" }
 ): Promise<void> {
   const raw = await Bun.file(configPath).text();
-  const doc = parse(raw) ?? {};
-  doc.urls = doc.urls ?? [];
+  const doc = parseDocument(raw);
 
-  const existing = doc.urls.find((u: any) => u.alias === entry.alias);
-  if (existing) {
+  const urlsSeq = doc.getIn(["urls"], true) as any;
+  const urls = urlsSeq?.toJSON() as any[] | undefined;
+
+  if (urls?.some((u: any) => u.alias === entry.alias)) {
     throw new Error(`Alias "${entry.alias}" already exists in config`);
   }
 
@@ -17,8 +18,13 @@ export async function addUrlToConfig(
   if (entry.htmlConverter) newEntry.htmlConverter = entry.htmlConverter;
   if (entry.contentType) newEntry.contentType = entry.contentType;
 
-  doc.urls.push(newEntry);
-  await Bun.write(configPath, stringify(doc, { lineWidth: 120 }));
+  if (!urlsSeq) {
+    doc.set("urls", [newEntry]);
+  } else {
+    urlsSeq.add(doc.createNode(newEntry));
+  }
+
+  await Bun.write(configPath, doc.toString({ lineWidth: 120 }));
 }
 
 export async function removeUrlFromConfig(
@@ -26,14 +32,17 @@ export async function removeUrlFromConfig(
   alias: string
 ): Promise<boolean> {
   const raw = await Bun.file(configPath).text();
-  const doc = parse(raw) ?? {};
-  doc.urls = doc.urls ?? [];
+  const doc = parseDocument(raw);
 
-  const before = doc.urls.length;
-  doc.urls = doc.urls.filter((u: any) => u.alias !== alias);
+  const urlsSeq = doc.getIn(["urls"], true) as any;
+  if (!urlsSeq) return false;
 
-  if (doc.urls.length === before) return false;
+  const urls = urlsSeq.toJSON() as any[];
+  const index = urls.findIndex((u: any) => u.alias === alias);
+  if (index === -1) return false;
 
-  await Bun.write(configPath, stringify(doc, { lineWidth: 120 }));
+  urlsSeq.delete(index);
+
+  await Bun.write(configPath, doc.toString({ lineWidth: 120 }));
   return true;
 }

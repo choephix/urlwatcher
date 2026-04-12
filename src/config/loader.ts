@@ -34,8 +34,8 @@ export async function loadConfig(explicitPath?: string): Promise<{ config: Confi
   const parsed = parse(raw);
   const config = ConfigSchema.parse(parsed);
   // Resolve dataDir relative to the config file's directory
-  config.dataDir = resolve(dirname(configPath), config.dataDir);
-  return { config, configPath };
+  const resolved = { ...config, dataDir: resolve(dirname(configPath), config.dataDir) };
+  return { config: resolved, configPath };
 }
 
 export { resolveConfigPath };

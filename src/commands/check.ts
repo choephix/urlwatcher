@@ -5,6 +5,7 @@ import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
 import { getConverter } from "../converters/registry.ts";
 import { loadState, saveState } from "../state.ts";
+import { acquireLock } from "../lock.ts";
 import {
   isGitRepo,
   isClean,
@@ -41,6 +42,20 @@ export async function checkCommand(
     );
   }
 
+  const releaseLock = acquireLock(dataDir);
+  try {
+    return await checkCommandLocked(config, dataDir, alias, dryRun);
+  } finally {
+    releaseLock();
+  }
+}
+
+async function checkCommandLocked(
+  config: Config,
+  dataDir: string,
+  alias?: string,
+  dryRun = false
+): Promise<CheckResult[]> {
   const urls = alias
     ? config.urls.filter((u) => u.alias === alias)
     : config.urls;
@@ -54,16 +69,12 @@ export async function checkCommand(
     return [];
   }
 
-  const results: CheckResult[] = [];
-  const writtenFiles: string[] = [];
-
-  for (const entry of urls) {
-    const result = await processUrl(entry, config, dataDir);
-    results.push(result);
-    if (!result.error) {
-      writtenFiles.push(result.alias);
-    }
-  }
+  const results = await Promise.all(
+    urls.map((entry) => processUrl(entry, config, dataDir))
+  );
+  const writtenFiles = results
+    .filter((r) => !r.error)
+    .map((r) => r.alias);
 
   const now = new Date().toISOString();
 
