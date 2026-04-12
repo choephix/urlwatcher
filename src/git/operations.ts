@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 interface GitResult {
   stdout: string;
   stderr: string;
@@ -77,4 +79,17 @@ export async function gitStatus(dataDir: string): Promise<string> {
 export async function isClean(dataDir: string): Promise<boolean> {
   const status = await gitStatus(dataDir);
   return status.trim() === "";
+}
+
+export async function gitRestoreFiles(dataDir: string, files: string[]): Promise<void> {
+  if (files.length === 0) return;
+  await runGit(dataDir, ["checkout", "HEAD", "--", ...files]);
+}
+
+export async function gitCleanFiles(dataDir: string, files: string[]): Promise<void> {
+  if (files.length === 0) return;
+  const { unlinkSync } = await import("node:fs");
+  for (const file of files) {
+    try { unlinkSync(resolve(dataDir, file)); } catch {}
+  }
 }

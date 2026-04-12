@@ -9,21 +9,35 @@ const jinaConverter: ConverterPlugin = {
   supportedContentTypes: ["text/html"],
   handlesOwnFetching: true,
 
-  async convert(url, _body, _contentType) {
-    const response = await fetch(`${JINA_BASE}${url}`, {
-      headers: { Accept: "text/markdown" },
-    });
+  async convert(url, _body, _contentType, options) {
+    const controller = new AbortController();
+    const timeout = options?.timeout ?? 30000;
+    const timer = setTimeout(() => controller.abort(), timeout);
 
-    if (response.status === 429) {
-      throw new Error("Jina Reader rate limit exceeded (429)");
+    try {
+      const response = await fetch(`${JINA_BASE}${url}`, {
+        headers: { Accept: "text/markdown" },
+        signal: controller.signal,
+      });
+
+      if (response.status === 429) {
+        throw new Error("Jina Reader rate limit exceeded (429)");
+      }
+
+      if (!response.ok) {
+        throw new Error(`Jina Reader returned ${response.status}: ${response.statusText}`);
+      }
+
+      const content = await response.text();
+      return { content, extension: "md" };
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        throw new Error(`Jina Reader timeout after ${timeout}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-
-    if (!response.ok) {
-      throw new Error(`Jina Reader returned ${response.status}: ${response.statusText}`);
-    }
-
-    const content = await response.text();
-    return { content, extension: "md" };
   },
 };
 

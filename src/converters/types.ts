@@ -8,5 +8,5 @@ export interface ConverterPlugin {
   description: string;
   supportedContentTypes: string[];
   handlesOwnFetching: boolean;
-  convert(url: string, body: string, contentType: string): Promise<ConvertResult>;
+  convert(url: string, body: string, contentType: string, options?: { timeout?: number }): Promise<ConvertResult>;
 }

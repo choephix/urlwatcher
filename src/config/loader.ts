@@ -1,7 +1,7 @@
 import { parse } from "yaml";
 import { ConfigSchema, type Config } from "./schema.ts";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 
 const CONFIG_FILENAME = "urlwatcher.yaml";
@@ -33,6 +33,8 @@ export async function loadConfig(explicitPath?: string): Promise<{ config: Confi
   const raw = await Bun.file(configPath).text();
   const parsed = parse(raw);
   const config = ConfigSchema.parse(parsed);
+  // Resolve dataDir relative to the config file's directory
+  config.dataDir = resolve(dirname(configPath), config.dataDir);
   return { config, configPath };
 }
 

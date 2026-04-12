@@ -30,9 +30,10 @@ program
 program
   .command("check [alias]")
   .description("Check tracked URLs for changes")
-  .action(async (alias?: string) => {
+  .option("-n, --dry-run", "Fetch and diff but don't commit or update state")
+  .action(async (alias: string | undefined, opts: { dryRun?: boolean }) => {
     const { config } = await loadConfig(program.opts().config);
-    const results = await checkCommand(config, alias);
+    const results = await checkCommand(config, alias, opts.dryRun);
 
     const changed = results.filter((r) => r.changed);
     const errors = results.filter((r) => r.error);

@@ -13,6 +13,8 @@ import {
   gitDiffCachedStat,
   gitResetHead,
   gitCommit,
+  gitRestoreFiles,
+  gitCleanFiles,
 } from "../git/operations.ts";
 
 // Ensure all converters are registered
@@ -22,7 +24,8 @@ import "../converters/jina.ts";
 
 export async function checkCommand(
   config: Config,
-  alias?: string
+  alias?: string,
+  dryRun = false
 ): Promise<CheckResult[]> {
   const dataDir = resolve(config.dataDir);
 
@@ -62,50 +65,58 @@ export async function checkCommand(
     }
   }
 
-  // Update state: lastChecked for all processed URLs
   const now = new Date().toISOString();
-  const state = await loadState(dataDir);
-  for (const r of results) {
-    if (!r.error) {
-      state[r.alias] = { ...state[r.alias], lastChecked: now };
-    }
-  }
 
   if (writtenFiles.length === 0) {
-    await saveState(dataDir, state);
-    await gitAdd(dataDir, [".state.yaml"]);
-    await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
-      // No changes to commit (state unchanged) — that's fine
-      gitResetHead(dataDir);
-    });
+    if (!dryRun) {
+      const state = await loadState(dataDir);
+      for (const r of results) {
+        if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
+      }
+      await saveState(dataDir, state);
+      await gitAdd(dataDir, [".state.yaml"]);
+      await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(dataDir);
+      });
+    }
     return results;
   }
 
   // Stage all written files
   const filenames = writtenFiles.map((a) => {
     const r = results.find((r) => r.alias === a)!;
-    const ext = r.url.endsWith(".json") ? "yaml" : getFileExtension(a, config);
-    return `${a}.${ext}`;
+    return `${a}.${r.extension}`;
   });
   await gitAdd(dataDir, filenames);
 
-  // Check for actual data changes (before staging state)
+  // Check for actual data changes
   const stat = await gitDiffCachedStat(dataDir);
   if (!stat.trim()) {
     await gitResetHead(dataDir);
     for (const r of results) {
       if (!r.error) r.changed = false;
     }
-    // Still save state (lastChecked updated)
-    await saveState(dataDir, state);
-    await gitAdd(dataDir, [".state.yaml"]);
-    await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
-      gitResetHead(dataDir);
-    });
+    if (!dryRun) {
+      const state = await loadState(dataDir);
+      for (const r of results) {
+        if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
+      }
+      await saveState(dataDir, state);
+      await gitAdd(dataDir, [".state.yaml"]);
+      await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(dataDir);
+      });
+    } else {
+      await gitResetHead(dataDir);
+      const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+      const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+      await gitRestoreFiles(dataDir, existingFiles);
+      await gitCleanFiles(dataDir, newFiles);
+    }
     return results;
   }
 
-  // Get the full diff (before staging state, so .state.yaml isn't in it)
+  // Get the full diff
   const fullDiff = await gitDiffCached(dataDir);
 
   // Parse which files changed from the stat output
@@ -116,34 +127,42 @@ export async function checkCommand(
       .map((line) => line.trim().split(/\s+/)[0]!)
   );
 
-  // Update results with change info and state
+  // Update results with change info
   for (const r of results) {
     if (r.error) continue;
-    const ext = getFileExtension(r.alias, config);
-    const filename = `${r.alias}.${ext}`;
+    const filename = `${r.alias}.${r.extension}`;
     r.changed = changedFiles.has(filename);
-    if (r.changed) {
-      state[r.alias]!.lastChanged = now;
-    }
   }
-
-  // Save state and stage it alongside data
-  await saveState(dataDir, state);
-  await gitAdd(dataDir, [".state.yaml"]);
-
-  // Commit
-  const changedAliases = results
-    .filter((r) => r.changed)
-    .map((r) => r.alias);
-  const timestamp = now;
-  const message = `urlwatcher: Update ${changedAliases.join(", ")} — ${timestamp}`;
-  const commitHash = await gitCommit(dataDir, message);
 
   // Attach diff to changed results
   for (const r of results) {
     if (r.changed) {
       r.diff = extractFileDiff(fullDiff, r.alias);
     }
+  }
+
+  if (dryRun) {
+    await gitResetHead(dataDir);
+    // Restore existing files to their previous state, delete new ones
+    const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+    const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+    await gitRestoreFiles(dataDir, existingFiles);
+    await gitCleanFiles(dataDir, newFiles);
+  } else {
+    // Update state
+    const state = await loadState(dataDir);
+    for (const r of results) {
+      if (!r.error) {
+        state[r.alias] = { ...state[r.alias], lastChecked: now };
+        if (r.changed) state[r.alias]!.lastChanged = now;
+      }
+    }
+    await saveState(dataDir, state);
+    await gitAdd(dataDir, [".state.yaml"]);
+
+    const changedAliases = results.filter((r) => r.changed).map((r) => r.alias);
+    const message = `urlwatcher: Update ${changedAliases.join(", ")} — ${now}`;
+    await gitCommit(dataDir, message);
   }
 
   return results;
@@ -197,17 +216,19 @@ async function processUrl(
         if (detected === "json") {
           converterName = entry.jsonConverter ?? config.defaults.jsonConverter;
           const jsonConverter = getConverter(converterName);
-          const converted = await jsonConverter.convert(entry.url, body, contentType);
+          const converted = await jsonConverter.convert(entry.url, body, contentType, { timeout });
           const outPath = resolve(dataDir, `${entry.alias}.${converted.extension}`);
           result.isNew = !existsSync(outPath);
           await Bun.write(outPath, converted.content);
+          result.extension = converted.extension;
           return result;
         }
       }
     }
 
-    const converted = await converter.convert(entry.url, body, contentType);
+    const converted = await converter.convert(entry.url, body, contentType, { timeout });
     await Bun.write(filePath, converted.content);
+    result.extension = converted.extension;
 
     return result;
   } catch (err: any) {
@@ -215,12 +236,6 @@ async function processUrl(
     result.error = err.message;
     return result;
   }
-}
-
-function getFileExtension(alias: string, config: Config): string {
-  const entry = config.urls.find((u) => u.alias === alias);
-  if (entry?.contentType === "json") return "yaml";
-  return "md";
 }
 
 function extractFileDiff(fullDiff: string, alias: string): string {

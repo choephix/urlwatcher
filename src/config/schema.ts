@@ -25,7 +25,7 @@ const ConfigSchema = z.object({
       jsonConverter: z.string().default("yaml"),
       timeout: z.number().positive().default(30000),
     })
-    .default({}),
+    .default({ htmlConverter: "turndown", jsonConverter: "yaml", timeout: 30000 }),
   urls: z.array(UrlEntrySchema).default([]),
   notifications: z
     .array(NotificationEntrySchema)

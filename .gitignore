@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Data directory (separate git repo)
 data/
+
+# Example workspace
+example/

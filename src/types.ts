@@ -1,4 +1,4 @@
-export interface FetchResult {
+export type FetchResult = {
   ok: true;
   body: string;
   contentType: string;
@@ -14,4 +14,5 @@ export interface CheckResult {
   isNew?: boolean;
   diff?: string;
   error?: string;
+  extension?: string;
 }
