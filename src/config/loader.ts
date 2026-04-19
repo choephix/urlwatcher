@@ -33,8 +33,12 @@ export async function loadConfig(explicitPath?: string): Promise<{ config: Confi
   const raw = await Bun.file(configPath).text();
   const parsed = parse(raw);
   const config = ConfigSchema.parse(parsed);
-  // Resolve dataDir relative to the config file's directory
-  const resolved = { ...config, dataDir: resolve(dirname(configPath), config.dataDir) };
+  const base = dirname(configPath);
+  const resolved = {
+    ...config,
+    dataDir: resolve(base, config.dataDir),
+    watchDir: resolve(base, config.watchDir),
+  };
   return { config: resolved, configPath };
 }
 

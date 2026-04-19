@@ -1,9 +1,6 @@
 import { z } from "zod/v4";
 
-const UrlEntrySchema = z.object({
-  alias: z
-    .string()
-    .regex(/^[a-zA-Z0-9\-_]+$/, "Alias must be alphanumeric with hyphens/underscores"),
+const WatcherFrontMatterSchema = z.object({
   url: z.url(),
   htmlConverter: z.string().optional(),
   jsonConverter: z.string().optional(),
@@ -19,6 +16,8 @@ const NotificationEntrySchema = z
 
 const ConfigSchema = z.object({
   dataDir: z.string(),
+  watchDir: z.string().default("./watchers"),
+  onChange: z.string().optional(),
   defaults: z
     .object({
       htmlConverter: z.string().default("turndown"),
@@ -26,12 +25,18 @@ const ConfigSchema = z.object({
       timeout: z.number().positive().default(30000),
     })
     .default({ htmlConverter: "turndown", jsonConverter: "yaml", timeout: 30000 }),
-  urls: z.array(UrlEntrySchema).default([]),
   notifications: z
     .array(NotificationEntrySchema)
     .default([{ type: "stdout" }]),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
-export type UrlEntry = z.infer<typeof UrlEntrySchema>;
-export { ConfigSchema, UrlEntrySchema };
+export type WatcherFrontMatter = z.infer<typeof WatcherFrontMatterSchema>;
+
+export interface Watcher extends WatcherFrontMatter {
+  alias: string;
+  body: string;
+  filePath: string;
+}
+
+export { ConfigSchema, WatcherFrontMatterSchema };

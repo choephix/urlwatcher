@@ -1,13 +1,12 @@
-import { addUrlToConfig } from "../config/writer.ts";
+import { createWatcherFile } from "../watchers/writer.ts";
 import { listConverters } from "../converters/registry.ts";
 
-// Ensure converters are registered
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
 import "../converters/jina.ts";
 
 export async function addCommand(
-  configPath: string,
+  watchDir: string,
   url: string,
   options: { alias: string; htmlConverter?: string; contentType?: string }
 ): Promise<void> {
@@ -25,12 +24,12 @@ export async function addCommand(
       ? options.contentType
       : undefined;
 
-  await addUrlToConfig(configPath, {
-    alias: options.alias,
+  const path = await createWatcherFile(watchDir, options.alias, {
     url,
     htmlConverter: options.htmlConverter,
     contentType,
   });
 
   console.log(`Added "${options.alias}" → ${url}`);
+  console.log(`  ${path}`);
 }

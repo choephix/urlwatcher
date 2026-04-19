@@ -15,4 +15,5 @@ export interface CheckResult {
   diff?: string;
   error?: string;
   extension?: string;
+  body?: string;
 }

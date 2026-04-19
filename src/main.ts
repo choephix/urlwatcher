@@ -10,7 +10,6 @@ import { removeCommand } from "./commands/remove.ts";
 import { listCommand } from "./commands/list.ts";
 import { getNotifier } from "./notifications/registry.ts";
 
-// Register notifiers
 import "./notifications/stdout.ts";
 
 const program = new Command()
@@ -20,11 +19,10 @@ const program = new Command()
 
 program
   .command("init")
-  .description("Initialize the data directory as a git repo")
+  .description("Initialize the data directory as a git repo and create the watcher directory")
   .action(async () => {
     const { config } = await loadConfig(program.opts().config);
-    const dataDir = resolve(config.dataDir);
-    await initCommand(dataDir);
+    await initCommand(resolve(config.dataDir), resolve(config.watchDir));
   });
 
 program
@@ -39,7 +37,6 @@ program
     const errors = results.filter((r) => r.error);
     const unchanged = results.filter((r) => !r.changed && !r.error);
 
-    // Notify for changed URLs
     for (const r of changed) {
       for (const notifConfig of config.notifications) {
         const notifier = getNotifier(notifConfig.type);
@@ -54,7 +51,6 @@ program
       }
     }
 
-    // Summary
     if (results.length > 0) {
       console.log("\n--- Summary ---");
       if (changed.length > 0)
@@ -68,13 +64,13 @@ program
 
 program
   .command("add <url>")
-  .description("Add a URL to track")
+  .description("Add a URL to track (creates a watcher Markdown file)")
   .requiredOption("-a, --alias <name>", "Alias for this URL")
   .option("--html-converter <name>", "HTML converter to use (turndown, jina)")
   .option("--content-type <type>", "Force content type (html, json)")
   .action(async (url: string, opts: any) => {
-    const { configPath } = await loadConfig(program.opts().config);
-    await addCommand(configPath, url, {
+    const { config } = await loadConfig(program.opts().config);
+    await addCommand(config.watchDir, url, {
       alias: opts.alias,
       htmlConverter: opts.htmlConverter,
       contentType: opts.contentType,
@@ -83,10 +79,10 @@ program
 
 program
   .command("remove <alias>")
-  .description("Stop tracking a URL")
+  .description("Stop tracking a URL (deletes its watcher Markdown file)")
   .action(async (alias: string) => {
-    const { configPath } = await loadConfig(program.opts().config);
-    await removeCommand(configPath, alias);
+    const { config } = await loadConfig(program.opts().config);
+    await removeCommand(config.watchDir, alias);
   });
 
 program
