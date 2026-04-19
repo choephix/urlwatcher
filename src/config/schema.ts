@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 const WatcherFrontMatterSchema = z.object({
   url: z.url(),
+  enabled: z.boolean().default(true),
   htmlConverter: z.string().optional(),
   jsonConverter: z.string().optional(),
   rssConverter: z.string().optional(),

@@ -6,8 +6,23 @@ interface GitResult {
   exitCode: number;
 }
 
+let gitPath: string | null = null;
+function resolveGit(): string {
+  if (gitPath) return gitPath;
+  const found = Bun.which("git");
+  if (!found) {
+    throw new Error(
+      "urlwatcher requires `git` on PATH, but it could not be found. " +
+        "Install git, or ensure it is available in the PATH of whatever runs urlwatcher. " +
+        `Current PATH: ${process.env.PATH ?? "(unset)"}`,
+    );
+  }
+  gitPath = found;
+  return found;
+}
+
 async function runGit(cwd: string, args: string[]): Promise<GitResult> {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = Bun.spawn([resolveGit(), ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
