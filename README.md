@@ -47,7 +47,7 @@ urlwatcher list              # show all watchers
 dataDir: ./data                # git-tracked output directory
 watchDir: ./watchers           # directory of per-URL Markdown files
 
-onChange: "my-agent --diff {{diff}} --instructions {{body}}"
+onChange: "my-agent --diff-file {{diff}} --instructions-file {{body}}"
 
 defaults:
   htmlConverter: turndown      # turndown | jina
@@ -83,14 +83,16 @@ Front-matter fields: `url` (required), `htmlConverter`, `jsonConverter`, `conten
 
 Optional shell command run once per URL that actually changed. Placeholders substituted in the command string:
 
-| Placeholder | Contents |
+| Placeholder | Expands to |
 |---|---|
-| `{{diff}}` | git diff for this URL's stored file |
-| `{{body}}` | the watcher's Markdown body |
-| `{{alias}}` | watcher alias |
-| `{{url}}` | watcher URL |
+| `{{diff}}` | path to a temp file holding the git diff for this URL |
+| `{{body}}` | path to a temp file holding the watcher's Markdown body |
+| `{{alias}}` | watcher alias (string) |
+| `{{url}}` | watcher URL (string) |
 
-Placeholders expand to properly-quoted references to env vars (`URLWATCHER_DIFF`, `URLWATCHER_BODY`, `URLWATCHER_ALIAS`, `URLWATCHER_URL`), so diff/body content cannot inject shell. The command runs via `sh -c` with those env vars set, inheriting stdio. It is skipped on `--dry-run` and when a URL is unchanged.
+`{{diff}}` and `{{body}}` resolve to *file paths*, not the content itself — RSS feeds and page snapshots easily exceed the OS `ARG_MAX` / env limit, so passing them inline would break. Use `cat {{diff}}` in your command to stream the content, or pass the path to a tool that knows how to read a file.
+
+Placeholders expand to properly-quoted references to env vars (`URLWATCHER_DIFF_FILE`, `URLWATCHER_BODY_FILE`, `URLWATCHER_ALIAS`, `URLWATCHER_URL`), so their values cannot inject shell. The command runs via `sh -c` with those env vars set, inheriting stdio. The temp files are cleaned up when the command exits. `onChange` is skipped on `--dry-run` and when a URL is unchanged.
 
 ## HTML Converters
 

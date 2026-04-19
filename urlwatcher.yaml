@@ -1,6 +1,6 @@
 dataDir: ./data
 watchDir: ./watchers
-# onChange: "my-agent --diff {{diff}} --instructions {{body}}"
+# onChange: "my-agent --diff-file {{diff}} --instructions-file {{body}}"
 defaults:
   htmlConverter: turndown
   jsonConverter: yaml

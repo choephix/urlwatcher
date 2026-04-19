@@ -1,0 +1,27 @@
+dataDir: ./data
+watchDir: ./watchers
+
+# {{diff}} and {{body}} expand to paths to temp files holding the
+# content, so the command can cat them (or pass the paths to a tool).
+# {{alias}} and {{url}} expand to the values directly.
+#
+# In a real setup you'd replace this with e.g. a call to an LLM CLI
+# that reads the body as a prompt and the diff as its payload.
+onChange: |
+  printf '\n════════════════════════════════════════\n'
+  printf 'CHANGED: %s (%s)\n'  {{alias}} {{url}}
+  printf '════════════════════════════════════════\n'
+  printf 'Instructions:\n'
+  cat {{body}}
+  printf '\n\nDiff:\n'
+  cat {{diff}}
+  printf '\n'
+
+defaults:
+  htmlConverter: turndown
+  jsonConverter: yaml
+  rssConverter: rss
+  timeout: 30000
+
+notifications:
+  - type: stdout
