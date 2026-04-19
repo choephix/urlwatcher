@@ -6,7 +6,8 @@
   },
   "scripts": {
     "example:init": "bun run src/main.ts -c examples/urlwatcher.yaml init",
-    "example": "bun run src/main.ts -c examples/urlwatcher.yaml check"
+    "example": "bun run src/main.ts -c examples/urlwatcher.yaml check",
+    "example:dry": "bun run src/main.ts -c examples/urlwatcher.yaml check --dry-run"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -23,5 +24,7 @@
     "turndown": "^7.2.4",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
-  }
+  },
+  "module": "index.ts",
+  "private": true
 }
