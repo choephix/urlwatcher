@@ -38,3 +38,5 @@ data/
 
 # Example workspace
 example/
+
+.claude
