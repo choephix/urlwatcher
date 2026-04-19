@@ -9,6 +9,7 @@ import { addCommand } from "./commands/add.ts";
 import { removeCommand } from "./commands/remove.ts";
 import { listCommand } from "./commands/list.ts";
 import { getNotifier } from "./notifications/registry.ts";
+import { runOnChange } from "./onchange.ts";
 
 import "./notifications/stdout.ts";
 
@@ -47,6 +48,15 @@ program
           isNew: r.isNew ?? false,
           commitHash: "",
           timestamp: new Date(),
+        });
+      }
+
+      if (config.onChange && !opts.dryRun) {
+        await runOnChange(config.onChange, {
+          alias: r.alias,
+          url: r.url,
+          diff: r.diff ?? "",
+          body: r.body ?? "",
         });
       }
     }
