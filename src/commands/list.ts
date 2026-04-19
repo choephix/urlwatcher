@@ -25,7 +25,8 @@ export async function listCommand(config: Config): Promise<void> {
           : (w.htmlConverter ?? config.defaults.htmlConverter);
     const type = w.contentType ?? "auto";
     const s = state[w.alias];
-    console.log(`  ${w.alias}`);
+    const marker = w.enabled ? "" : " (disabled)";
+    console.log(`  ${w.alias}${marker}`);
     console.log(`    url:          ${w.url}`);
     console.log(`    converter:    ${converter}`);
     console.log(`    type:         ${type}`);

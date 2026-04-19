@@ -58,18 +58,26 @@ async function checkCommandLocked(
   dryRun = false
 ): Promise<CheckResult[]> {
   const allWatchers = await loadWatchers(config.watchDir);
-  const watchers = alias
+  const selected = alias
     ? allWatchers.filter((w) => w.alias === alias)
     : allWatchers;
 
-  if (alias && watchers.length === 0) {
+  if (alias && selected.length === 0) {
     throw new Error(`No watcher with alias "${alias}" in ${config.watchDir}`);
   }
 
+  const watchers = selected.filter((w) => w.enabled);
+  const skipped = selected.filter((w) => !w.enabled).map((w) => w.alias);
+  if (skipped.length > 0) {
+    console.log(`Skipping disabled: ${skipped.join(", ")}`);
+  }
+
   if (watchers.length === 0) {
-    console.log(
-      `No watchers to check. Add some with: urlwatcher add <url> --alias <name>`
-    );
+    if (selected.length === 0) {
+      console.log(
+        `No watchers to check. Add some with: urlwatcher add <url> --alias <name>`
+      );
+    }
     return [];
   }
 
