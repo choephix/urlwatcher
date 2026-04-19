@@ -11,6 +11,8 @@ import {
   isGitRepo,
   isClean,
   gitAdd,
+  gitAddAll,
+  gitStatus,
   gitDiffCached,
   gitDiffCachedStat,
   gitResetHead,
@@ -18,6 +20,7 @@ import {
   gitRestoreFiles,
   gitCleanFiles,
 } from "../git/operations.ts";
+import { confirm } from "../prompt.ts";
 
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
@@ -38,9 +41,15 @@ export async function checkCommand(
   }
 
   if (!(await isClean(dataDir))) {
-    throw new Error(
-      `Data directory has uncommitted changes: ${dataDir}\nPlease commit or discard them before running check.`
-    );
+    const status = await gitStatus(dataDir);
+    console.log(`Data directory has uncommitted changes: ${dataDir}`);
+    console.log(status.trimEnd());
+    const shouldCommit = await confirm('Commit them as "manual changes" and continue?', false);
+    if (!shouldCommit) {
+      throw new Error("Aborted. Please commit or discard the changes before running check.");
+    }
+    await gitAddAll(dataDir);
+    await gitCommit(dataDir, "manual changes");
   }
 
   const releaseLock = acquireLock(dataDir);

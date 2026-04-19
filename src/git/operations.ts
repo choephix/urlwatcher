@@ -63,6 +63,13 @@ export async function gitAdd(dataDir: string, files: string[]): Promise<void> {
   }
 }
 
+export async function gitAddAll(dataDir: string): Promise<void> {
+  const result = await runGit(dataDir, ["add", "-A"]);
+  if (result.exitCode !== 0) {
+    throw new Error(`git add -A failed: ${result.stderr}`);
+  }
+}
+
 export async function gitDiffCached(dataDir: string): Promise<string> {
   const result = await runGit(dataDir, ["diff", "--cached", "--word-diff=plain"]);
   return result.stdout;
