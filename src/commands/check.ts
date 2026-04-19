@@ -22,6 +22,7 @@ import {
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
 import "../converters/jina.ts";
+import "../converters/rss.ts";
 
 export async function checkCommand(
   config: Config,
@@ -190,21 +191,14 @@ async function processWatcher(
     const timeout = watcher.timeout ?? config.defaults.timeout;
     const type = watcher.contentType;
 
-    const ext = type === "json" ? "yaml" : "md";
-    const filePath = resolve(dataDir, `${watcher.alias}.${ext}`);
-    result.isNew = !existsSync(filePath);
+    const initialExt = type === "html" || !type ? "md" : "yaml";
+    const initialPath = resolve(dataDir, `${watcher.alias}.${initialExt}`);
+    result.isNew = !existsSync(initialPath);
 
-    let converterName: string;
+    let converterName = pickConverter(type, watcher, config);
+    let converter = getConverter(converterName);
     let body = "";
     let contentType = "";
-
-    if (type === "json") {
-      converterName = watcher.jsonConverter ?? config.defaults.jsonConverter;
-    } else {
-      converterName = watcher.htmlConverter ?? config.defaults.htmlConverter;
-    }
-
-    const converter = getConverter(converterName);
 
     if (!converter.handlesOwnFetching) {
       const fetched = await fetchUrl(watcher.url, timeout);
@@ -217,22 +211,18 @@ async function processWatcher(
       contentType = fetched.contentType;
 
       if (!type) {
-        const detected = detectContentType(contentType);
-        if (detected === "json") {
-          converterName = watcher.jsonConverter ?? config.defaults.jsonConverter;
-          const jsonConverter = getConverter(converterName);
-          const converted = await jsonConverter.convert(watcher.url, body, contentType, { timeout });
-          const outPath = resolve(dataDir, `${watcher.alias}.${converted.extension}`);
-          result.isNew = !existsSync(outPath);
-          await Bun.write(outPath, converted.content);
-          result.extension = converted.extension;
-          return result;
+        const detected = detectContentType(contentType, body);
+        if (detected !== "html") {
+          converterName = pickConverter(detected, watcher, config);
+          converter = getConverter(converterName);
         }
       }
     }
 
     const converted = await converter.convert(watcher.url, body, contentType, { timeout });
-    await Bun.write(filePath, converted.content);
+    const outPath = resolve(dataDir, `${watcher.alias}.${converted.extension}`);
+    result.isNew = !existsSync(outPath);
+    await Bun.write(outPath, converted.content);
     result.extension = converted.extension;
 
     return result;
@@ -241,6 +231,16 @@ async function processWatcher(
     result.error = err.message;
     return result;
   }
+}
+
+function pickConverter(
+  type: "html" | "json" | "rss" | undefined,
+  watcher: Watcher,
+  config: Config
+): string {
+  if (type === "json") return watcher.jsonConverter ?? config.defaults.jsonConverter;
+  if (type === "rss") return watcher.rssConverter ?? config.defaults.rssConverter;
+  return watcher.htmlConverter ?? config.defaults.htmlConverter;
 }
 
 function extractFileDiff(fullDiff: string, alias: string): string {

@@ -20,7 +20,9 @@ export async function listCommand(config: Config): Promise<void> {
     const converter =
       w.contentType === "json"
         ? (w.jsonConverter ?? config.defaults.jsonConverter)
-        : (w.htmlConverter ?? config.defaults.htmlConverter);
+        : w.contentType === "rss"
+          ? (w.rssConverter ?? config.defaults.rssConverter)
+          : (w.htmlConverter ?? config.defaults.htmlConverter);
     const type = w.contentType ?? "auto";
     const s = state[w.alias];
     console.log(`  ${w.alias}`);

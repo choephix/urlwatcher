@@ -4,6 +4,7 @@ import { listConverters } from "../converters/registry.ts";
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
 import "../converters/jina.ts";
+import "../converters/rss.ts";
 
 export async function addCommand(
   watchDir: string,
@@ -20,7 +21,9 @@ export async function addCommand(
   }
 
   const contentType =
-    options.contentType === "html" || options.contentType === "json"
+    options.contentType === "html" ||
+    options.contentType === "json" ||
+    options.contentType === "rss"
       ? options.contentType
       : undefined;
 
