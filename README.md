@@ -5,29 +5,30 @@ Track changes to web pages and API endpoints. Fetches URLs, converts to diff-fri
 - HTML pages → Markdown (text-only, no DOM noise)
 - JSON endpoints → sorted YAML (deterministic, clean diffs)
 - Changes detected via `git diff`, committed automatically
+- Per-URL watchers live as Markdown files with YAML front matter — the body holds free-form instructions passed to an optional `onChange` command
 
 ## Setup
 
 ```sh
 bun install
-bun run src/main.ts init    # creates data dir + git repo
+bun run src/main.ts init    # creates data dir + watcher dir + git repo
 ```
 
 ## Commands
 
 ```sh
-urlwatcher init              # initialize data directory as git repo
-urlwatcher check             # check all tracked URLs for changes
-urlwatcher check <alias>     # check one URL
-urlwatcher add <url> [opts]  # add URL to track
-urlwatcher remove <alias>    # stop tracking
-urlwatcher list              # show all tracked URLs
+urlwatcher init              # initialize data + watcher directories
+urlwatcher check             # check all watchers for changes
+urlwatcher check <alias>     # check one watcher
+urlwatcher add <url> [opts]  # create a watcher Markdown file
+urlwatcher remove <alias>    # delete a watcher Markdown file
+urlwatcher list              # show all watchers
 ```
 
 ### add options
 
 ```
--a, --alias <name>            required — filesystem-safe identifier
+-a, --alias <name>            required — filesystem-safe identifier (= filename)
 --html-converter <name>       turndown (default) or jina
 --content-type <type>         force html or json (otherwise auto-detected)
 ```
@@ -40,29 +41,58 @@ urlwatcher list              # show all tracked URLs
 
 ## Config
 
-`urlwatcher.yaml` — looked up in cwd, then `~/.config/urlwatcher/`.
+`urlwatcher.yaml` — looked up in cwd, then `~/.config/urlwatcher/`. Paths are resolved relative to the config file.
 
 ```yaml
-dataDir: /path/to/data        # git-tracked output directory
+dataDir: ./data                # git-tracked output directory
+watchDir: ./watchers           # directory of per-URL Markdown files
+
+onChange: "my-agent --diff-file {{diff}} --instructions-file {{body}}"
 
 defaults:
   htmlConverter: turndown      # turndown | jina
   jsonConverter: yaml          # yaml
   timeout: 30000               # fetch timeout ms
 
-urls:
-  - alias: my-page
-    url: https://example.com
-  - alias: my-api
-    url: https://api.example.com/data
-    contentType: json
-  - alias: js-heavy-page
-    url: https://spa-site.com
-    htmlConverter: jina         # overrides default per-URL
-
 notifications:
   - type: stdout
 ```
+
+The config no longer contains the list of URLs — each URL is its own file under `watchDir`.
+
+## Watcher files
+
+Each tracked URL is a Markdown file `<watchDir>/<alias>.md`. The filename (minus `.md`) is the alias. YAML front matter holds the per-URL settings; the body is free-form instructions passed to `onChange`.
+
+```markdown
+---
+url: https://example.com/blog
+htmlConverter: turndown        # optional, overrides default
+contentType: html              # optional: html | json (auto if omitted)
+timeout: 15000                 # optional, overrides default
+---
+
+Any text down here is ignored by urlwatcher itself. It is made
+available to the `onChange` command as `{{body}}`, so you can embed
+instructions meant for a downstream AI agent.
+```
+
+Front-matter fields: `url` (required), `htmlConverter`, `jsonConverter`, `contentType`, `timeout` (all optional).
+
+## onChange
+
+Optional shell command run once per URL that actually changed. Placeholders substituted in the command string:
+
+| Placeholder | Expands to |
+|---|---|
+| `{{diff}}` | path to a temp file holding the git diff for this URL |
+| `{{body}}` | path to a temp file holding the watcher's Markdown body |
+| `{{alias}}` | watcher alias (string) |
+| `{{url}}` | watcher URL (string) |
+
+`{{diff}}` and `{{body}}` resolve to *file paths*, not the content itself — RSS feeds and page snapshots easily exceed the OS `ARG_MAX` / env limit, so passing them inline would break. Use `cat {{diff}}` in your command to stream the content, or pass the path to a tool that knows how to read a file.
+
+Placeholders expand to properly-quoted references to env vars (`URLWATCHER_DIFF_FILE`, `URLWATCHER_BODY_FILE`, `URLWATCHER_ALIAS`, `URLWATCHER_URL`), so their values cannot inject shell. The command runs via `sh -c` with those env vars set, inheriting stdio. The temp files are cleaned up when the command exits. `onChange` is skipped on `--dry-run` and when a URL is unchanged.
 
 ## HTML Converters
 
@@ -71,15 +101,16 @@ notifications:
 | `turndown` | Local. Readability extracts article, Turndown converts to markdown. | No |
 | `jina` | Remote. Sends URL to `r.jina.ai`, gets markdown back. | Yes |
 
-Set per-URL via `htmlConverter` field or globally in `defaults.htmlConverter`.
+Set per-URL via `htmlConverter` in front matter, or globally in `defaults.htmlConverter`.
 
 ## How it works
 
-1. Fetches each tracked URL
-2. Converts response (HTML→md, JSON→yaml)
-3. Writes to `<dataDir>/<alias>.md` or `<alias>.yaml`
-4. `git add` + `git diff --cached` to detect changes
-5. If changed: commits and prints diff. If unchanged: no-op.
+1. Loads each `.md` file from `watchDir` as a watcher
+2. Fetches its URL
+3. Converts response (HTML→md, JSON→yaml)
+4. Writes to `<dataDir>/<alias>.md` or `<alias>.yaml`
+5. `git add` + `git diff --cached` to detect changes
+6. If changed: commits, prints diff via notifications, runs `onChange` (if configured). If unchanged: concise unchanged summary, no-op.
 
 Fetch failures skip the URL with a warning — existing file untouched.
 

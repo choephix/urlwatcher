@@ -36,9 +36,22 @@ export async function fetchUrl(url: string, timeout: number): Promise<FetchResul
 
 export function detectContentType(
   headerContentType: string,
-  configContentType?: "html" | "json"
-): "html" | "json" {
+  body?: string,
+  configContentType?: "html" | "json" | "rss"
+): "html" | "json" | "rss" {
   if (configContentType) return configContentType;
-  if (headerContentType.includes("json")) return "json";
+  const ct = headerContentType.toLowerCase();
+  if (ct.includes("rss") || ct.includes("atom")) return "rss";
+  if (ct.includes("json")) return "json";
+  if (ct.includes("xml") && body && looksLikeFeed(body)) return "rss";
+  if (body) {
+    const head = body.trimStart().slice(0, 512).toLowerCase();
+    if (head.includes("<rss") || head.includes("<feed")) return "rss";
+  }
   return "html";
+}
+
+function looksLikeFeed(body: string): boolean {
+  const head = body.trimStart().slice(0, 512).toLowerCase();
+  return head.includes("<rss") || head.includes("<feed");
 }

@@ -1,12 +1,12 @@
-import { removeUrlFromConfig } from "../config/writer.ts";
+import { deleteWatcherFile } from "../watchers/writer.ts";
 
 export async function removeCommand(
-  configPath: string,
+  watchDir: string,
   alias: string
 ): Promise<void> {
-  const removed = await removeUrlFromConfig(configPath, alias);
+  const removed = deleteWatcherFile(watchDir, alias);
   if (!removed) {
-    throw new Error(`No tracked URL with alias "${alias}"`);
+    throw new Error(`No watcher with alias "${alias}"`);
   }
-  console.log(`Removed "${alias}" from tracking`);
+  console.log(`Removed "${alias}"`);
 }

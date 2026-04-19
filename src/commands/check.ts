@@ -1,11 +1,12 @@
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import type { Config, UrlEntry } from "../config/schema.ts";
+import type { Config, Watcher } from "../config/schema.ts";
 import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
 import { getConverter } from "../converters/registry.ts";
 import { loadState, saveState } from "../state.ts";
 import { acquireLock } from "../lock.ts";
+import { loadWatchers } from "../watchers/loader.ts";
 import {
   isGitRepo,
   isClean,
@@ -18,10 +19,10 @@ import {
   gitCleanFiles,
 } from "../git/operations.ts";
 
-// Ensure all converters are registered
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
 import "../converters/jina.ts";
+import "../converters/rss.ts";
 
 export async function checkCommand(
   config: Config,
@@ -56,21 +57,24 @@ async function checkCommandLocked(
   alias?: string,
   dryRun = false
 ): Promise<CheckResult[]> {
-  const urls = alias
-    ? config.urls.filter((u) => u.alias === alias)
-    : config.urls;
+  const allWatchers = await loadWatchers(config.watchDir);
+  const watchers = alias
+    ? allWatchers.filter((w) => w.alias === alias)
+    : allWatchers;
 
-  if (alias && urls.length === 0) {
-    throw new Error(`No tracked URL with alias "${alias}"`);
+  if (alias && watchers.length === 0) {
+    throw new Error(`No watcher with alias "${alias}" in ${config.watchDir}`);
   }
 
-  if (urls.length === 0) {
-    console.log("No URLs to check. Add some with: urlwatcher add <url>");
+  if (watchers.length === 0) {
+    console.log(
+      `No watchers to check. Add some with: urlwatcher add <url> --alias <name>`
+    );
     return [];
   }
 
   const results = await Promise.all(
-    urls.map((entry) => processUrl(entry, config, dataDir))
+    watchers.map((w) => processWatcher(w, config, dataDir))
   );
   const writtenFiles = results
     .filter((r) => !r.error)
@@ -93,14 +97,12 @@ async function checkCommandLocked(
     return results;
   }
 
-  // Stage all written files
   const filenames = writtenFiles.map((a) => {
     const r = results.find((r) => r.alias === a)!;
     return `${a}.${r.extension}`;
   });
   await gitAdd(dataDir, filenames);
 
-  // Check for actual data changes
   const stat = await gitDiffCachedStat(dataDir);
   if (!stat.trim()) {
     await gitResetHead(dataDir);
@@ -127,10 +129,8 @@ async function checkCommandLocked(
     return results;
   }
 
-  // Get the full diff
   const fullDiff = await gitDiffCached(dataDir);
 
-  // Parse which files changed from the stat output
   const changedFiles = new Set(
     stat
       .split("\n")
@@ -138,14 +138,12 @@ async function checkCommandLocked(
       .map((line) => line.trim().split(/\s+/)[0]!)
   );
 
-  // Update results with change info
   for (const r of results) {
     if (r.error) continue;
     const filename = `${r.alias}.${r.extension}`;
     r.changed = changedFiles.has(filename);
   }
 
-  // Attach diff to changed results
   for (const r of results) {
     if (r.changed) {
       r.diff = extractFileDiff(fullDiff, r.alias);
@@ -154,13 +152,11 @@ async function checkCommandLocked(
 
   if (dryRun) {
     await gitResetHead(dataDir);
-    // Restore existing files to their previous state, delete new ones
     const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
     const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
     await gitRestoreFiles(dataDir, existingFiles);
     await gitCleanFiles(dataDir, newFiles);
   } else {
-    // Update state
     const state = await loadState(dataDir);
     for (const r of results) {
       if (!r.error) {
@@ -179,74 +175,72 @@ async function checkCommandLocked(
   return results;
 }
 
-async function processUrl(
-  entry: UrlEntry,
+async function processWatcher(
+  watcher: Watcher,
   config: Config,
   dataDir: string
 ): Promise<CheckResult> {
   const result: CheckResult = {
-    alias: entry.alias,
-    url: entry.url,
+    alias: watcher.alias,
+    url: watcher.url,
     changed: false,
+    body: watcher.body,
   };
 
   try {
-    const timeout = entry.timeout ?? config.defaults.timeout;
-    const type = entry.contentType;
+    const timeout = watcher.timeout ?? config.defaults.timeout;
+    const type = watcher.contentType;
 
-    // Check if this is a first-time fetch
-    const ext = type === "json" ? "yaml" : "md";
-    const filePath = resolve(dataDir, `${entry.alias}.${ext}`);
-    result.isNew = !existsSync(filePath);
+    const initialExt = type === "html" || !type ? "md" : "yaml";
+    const initialPath = resolve(dataDir, `${watcher.alias}.${initialExt}`);
+    result.isNew = !existsSync(initialPath);
 
-    let converterName: string;
+    let converterName = pickConverter(type, watcher, config);
+    let converter = getConverter(converterName);
     let body = "";
     let contentType = "";
 
-    if (type === "json") {
-      converterName = entry.jsonConverter ?? config.defaults.jsonConverter;
-    } else {
-      converterName = entry.htmlConverter ?? config.defaults.htmlConverter;
-    }
-
-    const converter = getConverter(converterName);
-
     if (!converter.handlesOwnFetching) {
-      const fetched = await fetchUrl(entry.url, timeout);
+      const fetched = await fetchUrl(watcher.url, timeout);
       if (!fetched.ok) {
-        console.warn(`  ⚠ ${entry.alias}: ${fetched.error}`);
+        console.warn(`  ⚠ ${watcher.alias}: ${fetched.error}`);
         result.error = fetched.error;
         return result;
       }
       body = fetched.body;
       contentType = fetched.contentType;
 
-      // Re-detect content type from actual response if not forced
       if (!type) {
-        const detected = detectContentType(contentType);
-        if (detected === "json") {
-          converterName = entry.jsonConverter ?? config.defaults.jsonConverter;
-          const jsonConverter = getConverter(converterName);
-          const converted = await jsonConverter.convert(entry.url, body, contentType, { timeout });
-          const outPath = resolve(dataDir, `${entry.alias}.${converted.extension}`);
-          result.isNew = !existsSync(outPath);
-          await Bun.write(outPath, converted.content);
-          result.extension = converted.extension;
-          return result;
+        const detected = detectContentType(contentType, body);
+        if (detected !== "html") {
+          converterName = pickConverter(detected, watcher, config);
+          converter = getConverter(converterName);
         }
       }
     }
 
-    const converted = await converter.convert(entry.url, body, contentType, { timeout });
-    await Bun.write(filePath, converted.content);
+    const converted = await converter.convert(watcher.url, body, contentType, { timeout });
+    const outPath = resolve(dataDir, `${watcher.alias}.${converted.extension}`);
+    result.isNew = !existsSync(outPath);
+    await Bun.write(outPath, converted.content);
     result.extension = converted.extension;
 
     return result;
   } catch (err: any) {
-    console.warn(`  ⚠ ${entry.alias}: ${err.message}`);
+    console.warn(`  ⚠ ${watcher.alias}: ${err.message}`);
     result.error = err.message;
     return result;
   }
+}
+
+function pickConverter(
+  type: "html" | "json" | "rss" | undefined,
+  watcher: Watcher,
+  config: Config
+): string {
+  if (type === "json") return watcher.jsonConverter ?? config.defaults.jsonConverter;
+  if (type === "rss") return watcher.rssConverter ?? config.defaults.rssConverter;
+  return watcher.htmlConverter ?? config.defaults.htmlConverter;
 }
 
 function extractFileDiff(fullDiff: string, alias: string): string {
@@ -260,7 +254,6 @@ function extractFileDiff(fullDiff: string, alias: string): string {
       continue;
     }
     if (!capturing) continue;
-    // Strip git metadata lines
     if (
       line.startsWith("index ") ||
       line.startsWith("--- ") ||
