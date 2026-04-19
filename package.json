@@ -4,6 +4,10 @@
   "bin": {
     "urlwatcher": "./src/main.ts"
   },
+  "scripts": {
+    "example:init": "bun run src/main.ts -c examples/urlwatcher.yaml init",
+    "example": "bun run src/main.ts -c examples/urlwatcher.yaml check"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/turndown": "^5.0.6"
