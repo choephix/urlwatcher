@@ -38,6 +38,9 @@ export async function loadConfig(explicitPath?: string): Promise<{ config: Confi
     ...config,
     dataDir: resolve(base, config.dataDir),
     watchDir: resolve(base, config.watchDir),
+    notifications: config.notifications.map((n) =>
+      typeof n.path === "string" ? { ...n, path: resolve(base, n.path) } : n
+    ),
   };
   return { config: resolved, configPath };
 }

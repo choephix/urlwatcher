@@ -14,7 +14,7 @@ import {
   gitAddAll,
   gitStatus,
   gitDiffCached,
-  gitDiffCachedStat,
+  gitDiffCachedNumstat,
   gitResetHead,
   gitCommit,
   gitRestoreFiles,
@@ -120,8 +120,8 @@ async function checkCommandLocked(
   });
   await gitAdd(dataDir, filenames);
 
-  const stat = await gitDiffCachedStat(dataDir);
-  if (!stat.trim()) {
+  const numstat = await gitDiffCachedNumstat(dataDir);
+  if (numstat.size === 0) {
     await gitResetHead(dataDir);
     for (const r of results) {
       if (!r.error) r.changed = false;
@@ -148,23 +148,15 @@ async function checkCommandLocked(
 
   const fullDiff = await gitDiffCached(dataDir);
 
-  const changedFiles = new Set(
-    stat
-      .split("\n")
-      .filter((line) => line.includes("|"))
-      .map((line) => line.trim().split(/\s+/)[0]!)
-  );
-
   for (const r of results) {
     if (r.error) continue;
     const filename = `${r.alias}.${r.extension}`;
-    r.changed = changedFiles.has(filename);
-  }
-
-  for (const r of results) {
-    if (r.changed) {
-      r.diff = extractFileDiff(fullDiff, r.alias);
-    }
+    const counts = numstat.get(filename);
+    if (!counts) continue;
+    r.changed = true;
+    r.diff = extractFileDiff(fullDiff, r.alias);
+    r.added = counts.added;
+    r.removed = counts.removed;
   }
 
   if (dryRun) {

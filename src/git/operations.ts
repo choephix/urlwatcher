@@ -75,9 +75,21 @@ export async function gitDiffCached(dataDir: string): Promise<string> {
   return result.stdout;
 }
 
-export async function gitDiffCachedStat(dataDir: string): Promise<string> {
-  const result = await runGit(dataDir, ["diff", "--cached", "--stat"]);
-  return result.stdout;
+export async function gitDiffCachedNumstat(
+  dataDir: string
+): Promise<Map<string, { added: number; removed: number }>> {
+  const result = await runGit(dataDir, ["diff", "--cached", "--numstat"]);
+  const map = new Map<string, { added: number; removed: number }>();
+  for (const line of result.stdout.split("\n")) {
+    if (!line.trim()) continue;
+    // Format: `<added>\t<removed>\t<path>`. Binary files report "-" for counts.
+    const [addedStr, removedStr, ...nameParts] = line.split("\t");
+    const name = nameParts.join("\t");
+    const added = addedStr === "-" ? 0 : parseInt(addedStr ?? "0", 10);
+    const removed = removedStr === "-" ? 0 : parseInt(removedStr ?? "0", 10);
+    map.set(name, { added, removed });
+  }
+  return map;
 }
 
 export async function gitResetHead(dataDir: string): Promise<void> {

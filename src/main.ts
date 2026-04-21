@@ -12,6 +12,7 @@ import { getNotifier } from "./notifications/registry.ts";
 import { runOnChange } from "./onchange.ts";
 
 import "./notifications/stdout.ts";
+import "./notifications/file.ts";
 
 const program = new Command()
   .name("urlwatcher")
@@ -32,26 +33,22 @@ program
   .option("-n, --dry-run", "Fetch and diff but don't commit or update state")
   .action(async (alias: string | undefined, opts: { dryRun?: boolean }) => {
     const { config } = await loadConfig(program.opts().config);
+    const timestamp = new Date();
     const results = await checkCommand(config, alias, opts.dryRun);
 
-    const changed = results.filter((r) => r.changed);
-    const errors = results.filter((r) => r.error);
-    const unchanged = results.filter((r) => !r.changed && !r.error);
-
-    for (const r of changed) {
+    if (results.length > 0) {
       for (const notifConfig of config.notifications) {
         const notifier = getNotifier(notifConfig.type);
-        await notifier.notify({
-          alias: r.alias,
-          url: r.url,
-          diff: r.diff ?? "",
-          isNew: r.isNew ?? false,
-          commitHash: "",
-          timestamp: new Date(),
-        });
+        await notifier.notifyRun(
+          { timestamp, results, dryRun: opts.dryRun ?? false },
+          notifConfig
+        );
       }
+    }
 
-      if (config.onChange && !opts.dryRun) {
+    if (config.onChange && !opts.dryRun) {
+      for (const r of results) {
+        if (!r.changed) continue;
         await runOnChange(config.onChange, {
           alias: r.alias,
           url: r.url,
@@ -59,16 +56,6 @@ program
           body: r.body ?? "",
         });
       }
-    }
-
-    if (results.length > 0) {
-      console.log("\n--- Summary ---");
-      if (changed.length > 0)
-        console.log(`  Changed:   ${changed.map((r) => r.alias).join(", ")}`);
-      if (unchanged.length > 0)
-        console.log(`  Unchanged: ${unchanged.map((r) => r.alias).join(", ")}`);
-      if (errors.length > 0)
-        console.log(`  Errors:    ${errors.map((r) => r.alias).join(", ")}`);
     }
   });
 

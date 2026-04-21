@@ -1,20 +1,13 @@
 import { registerNotifier } from "./registry.ts";
 import type { NotificationPlugin } from "./types.ts";
+import { formatRunBlock } from "./format.ts";
 
 const stdoutNotifier: NotificationPlugin = {
   name: "stdout",
 
-  async notify(report) {
-    console.log(`\n--- ${report.alias} (${report.url}) ---`);
-    if (report.isNew) {
-      console.log("New: first snapshot saved");
-    } else {
-      console.log(report.diff);
-    }
-  },
-
-  async notifyError(alias, url, error) {
-    console.warn(`⚠ ${alias} (${url}): ${error.message}`);
+  async notifyRun(report) {
+    // write() (not console.log) — formatRunBlock already ends with newlines.
+    process.stdout.write(formatRunBlock(report));
   },
 };
 

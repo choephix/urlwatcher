@@ -1,14 +1,17 @@
-export interface ChangeReport {
-  alias: string;
-  url: string;
-  diff: string;
-  isNew: boolean;
-  commitHash: string;
+import type { CheckResult } from "../types.ts";
+
+export interface NotificationEntry {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface RunReport {
   timestamp: Date;
+  results: CheckResult[];
+  dryRun: boolean;
 }
 
 export interface NotificationPlugin {
   name: string;
-  notify(report: ChangeReport): Promise<void>;
-  notifyError?(alias: string, url: string, error: Error): Promise<void>;
+  notifyRun(report: RunReport, entry: NotificationEntry): Promise<void>;
 }

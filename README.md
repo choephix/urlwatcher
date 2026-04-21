@@ -56,9 +56,39 @@ defaults:
 
 notifications:
   - type: stdout
+  - type: file
+    path: ./runs.log          # relative to the config file
 ```
 
 The config no longer contains the list of URLs — each URL is its own file under `watchDir`.
+
+## Notifications
+
+Each run emits one block to every configured notifier. Two are built in:
+
+| Type | Config | Behaviour |
+|---|---|---|
+| `stdout` | — | Writes the run block to stdout. |
+| `file` | `path: <file>` (relative to config) | Appends the run block to a plain-text log file. Parent dirs are created on demand. Dry-runs are skipped. |
+
+A run block looks like:
+
+```
+════════════════════════════════════════════════════════════
+  2026-04-21 08:00:00
+════════════════════════════════════════════════════════════
+
+[blog] no changes
+[api]  changed  +3 -1
+@@ -1,3 +1,3 @@
+…diff…
+
+[feed] error  Timeout after 30000ms
+
+
+```
+
+Consecutive `no changes` / `error` entries are packed tight; entries with a diff get a blank line on either side. Every run is separated from the next by three blank lines, so the log stays skimmable as it grows.
 
 ## Watcher files
 

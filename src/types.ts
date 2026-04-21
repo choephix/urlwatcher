@@ -13,6 +13,8 @@ export interface CheckResult {
   changed: boolean;
   isNew?: boolean;
   diff?: string;
+  added?: number;
+  removed?: number;
   error?: string;
   extension?: string;
   body?: string;
