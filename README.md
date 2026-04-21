@@ -97,6 +97,8 @@ notifications:
   - type: stdout
 ```
 
+`init` does not create this config file for you. Right now setup is manual: create `urlwatcher.yaml` yourself, or copy and edit `examples/urlwatcher.yaml`.
+
 Initialize the directories and the internal git repo inside `dataDir`:
 
 ```sh
@@ -162,6 +164,8 @@ Aliases must be filesystem-safe and may contain only letters, numbers, hyphens, 
 ## Config
 
 `urlwatcher.yaml` controls runtime behavior. Paths are resolved relative to the config file location.
+
+`urlwatcher init` reads an existing config file; it does not generate one.
 
 ```yaml
 dataDir: ./data
