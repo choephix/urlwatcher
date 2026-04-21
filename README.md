@@ -81,7 +81,9 @@ urlwatcher <command>
 
 ## Quick Start
 
-Create a config file:
+If `urlwatcher.yaml` does not exist yet, `init` now creates it interactively and prompts for the important fields. Press Enter to accept the defaults.
+
+The generated config looks like this:
 
 ```yaml
 dataDir: ./data
@@ -96,8 +98,6 @@ defaults:
 notifications:
   - type: stdout
 ```
-
-`init` does not create this config file for you. Right now setup is manual: create `urlwatcher.yaml` yourself, or copy and edit `examples/urlwatcher.yaml`.
 
 Initialize the directories and the internal git repo inside `dataDir`:
 
@@ -165,7 +165,15 @@ Aliases must be filesystem-safe and may contain only letters, numbers, hyphens, 
 
 `urlwatcher.yaml` controls runtime behavior. Paths are resolved relative to the config file location.
 
-`urlwatcher init` reads an existing config file; it does not generate one.
+If the config file is missing when you run `urlwatcher init`, the CLI creates it for you and prompts for:
+
+- `dataDir`
+- `watchDir`
+- default fetch timeout
+- optional `onChange` command
+- optional file log path for the built-in file notifier
+
+If you prefer, you can still create or edit `urlwatcher.yaml` manually, or start from `examples/urlwatcher.yaml`.
 
 ```yaml
 dataDir: ./data

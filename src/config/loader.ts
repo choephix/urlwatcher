@@ -1,17 +1,31 @@
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { ConfigSchema, type Config } from "./schema.ts";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
+import { promptText, type AskFn } from "../prompt.ts";
 
 const CONFIG_FILENAME = "urlwatcher.yaml";
+const DEFAULT_DATA_DIR = "./data";
+const DEFAULT_WATCH_DIR = "./watchers";
+const DEFAULT_TIMEOUT_MS = 30000;
 
-function resolveConfigPath(explicitPath?: string): string {
+type RawConfig = {
+  dataDir: string;
+  watchDir: string;
+  onChange?: string;
+  defaults: {
+    htmlConverter: string;
+    jsonConverter: string;
+    rssConverter: string;
+    timeout: number;
+  };
+  notifications: Array<{ type: string; path?: string }>;
+};
+
+function findConfigPath(explicitPath?: string): string | undefined {
   if (explicitPath) {
-    if (!existsSync(explicitPath)) {
-      throw new Error(`Config file not found: ${explicitPath}`);
-    }
-    return resolve(explicitPath);
+    return existsSync(explicitPath) ? resolve(explicitPath) : undefined;
   }
 
   const candidates = [
@@ -19,13 +33,89 @@ function resolveConfigPath(explicitPath?: string): string {
     resolve(homedir(), ".config", "urlwatcher", CONFIG_FILENAME),
   ];
 
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function resolveConfigPath(explicitPath?: string): string {
+  const foundPath = findConfigPath(explicitPath);
+  if (foundPath) return foundPath;
+
+  const candidates = explicitPath
+    ? [resolve(explicitPath)]
+    : [
+        resolve(process.cwd(), CONFIG_FILENAME),
+        resolve(homedir(), ".config", "urlwatcher", CONFIG_FILENAME),
+      ];
 
   throw new Error(
     `No ${CONFIG_FILENAME} found. Searched:\n${candidates.map((c) => `  - ${c}`).join("\n")}`
   );
+}
+
+async function promptPositiveInt(
+  question: string,
+  defaultValue: number,
+  ask?: AskFn
+): Promise<number> {
+  while (true) {
+    const answer = await promptText(question, String(defaultValue), ask);
+    const value = Number(answer);
+    if (Number.isInteger(value) && value > 0) return value;
+    console.log("Please enter a positive integer.");
+  }
+}
+
+async function buildInitConfig(ask?: AskFn): Promise<RawConfig> {
+  const dataDir = await promptText("Data directory", DEFAULT_DATA_DIR, ask);
+  const watchDir = await promptText("Watcher directory", DEFAULT_WATCH_DIR, ask);
+  const timeout = await promptPositiveInt("Default fetch timeout (ms)", DEFAULT_TIMEOUT_MS, ask);
+  const onChange = await promptText("onChange command (optional)", "", ask);
+  const fileLogPath = await promptText("File notification log path (optional)", "", ask);
+
+  return ConfigSchema.parse({
+    dataDir,
+    watchDir,
+    ...(onChange === "" ? {} : { onChange }),
+    defaults: {
+      htmlConverter: "turndown",
+      jsonConverter: "yaml",
+      rssConverter: "rss",
+      timeout,
+    },
+    notifications:
+      fileLogPath === ""
+        ? [{ type: "stdout" }]
+        : [{ type: "stdout" }, { type: "file", path: fileLogPath }],
+  });
+}
+
+async function createConfigForInit(configPath: string, ask?: AskFn): Promise<Config> {
+  console.log(`No ${CONFIG_FILENAME} found. Creating one at: ${configPath}`);
+  console.log("Press Enter to accept defaults.");
+
+  const config = await buildInitConfig(ask);
+  mkdirSync(dirname(configPath), { recursive: true });
+  await Bun.write(configPath, stringify(config, { lineWidth: 120 }));
+  console.log(`Created config file: ${configPath}`);
+
+  return (await loadConfig(configPath)).config;
+}
+
+export async function ensureConfigForInit(
+  explicitPath?: string,
+  ask?: AskFn
+): Promise<{ config: Config; configPath: string; created: boolean }> {
+  const existingPath = findConfigPath(explicitPath);
+  if (existingPath) {
+    const loaded = await loadConfig(existingPath);
+    return { ...loaded, created: false };
+  }
+
+  const configPath = explicitPath
+    ? resolve(explicitPath)
+    : resolve(process.cwd(), CONFIG_FILENAME);
+  const config = await createConfigForInit(configPath, ask);
+  return { config, configPath, created: true };
 }
 
 export async function loadConfig(explicitPath?: string): Promise<{ config: Config; configPath: string }> {

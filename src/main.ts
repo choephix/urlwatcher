@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 
 import { Command } from "commander";
-import { resolve } from "node:path";
-import { loadConfig } from "./config/loader.ts";
+import { ensureConfigForInit, loadConfig } from "./config/loader.ts";
 import { initCommand } from "./commands/init.ts";
 import { checkCommand } from "./commands/check.ts";
 import { addCommand } from "./commands/add.ts";
@@ -23,8 +22,8 @@ program
   .command("init")
   .description("Initialize the data directory as a git repo and create the watcher directory")
   .action(async () => {
-    const { config } = await loadConfig(program.opts().config);
-    await initCommand(resolve(config.dataDir), resolve(config.watchDir));
+    const { config } = await ensureConfigForInit(program.opts().config);
+    await initCommand(config.dataDir, config.watchDir);
   });
 
 program
