@@ -1,4 +1,4 @@
-import { createWatcherFile } from "../watchers/writer.ts";
+import { createSpecFile } from "../specs/writer.ts";
 import { listConverters } from "../converters/registry.ts";
 
 import "../converters/yaml-converter.ts";
@@ -7,7 +7,7 @@ import "../converters/jina.ts";
 import "../converters/rss.ts";
 
 export async function addCommand(
-  watchDir: string,
+  specDir: string,
   url: string,
   options: { alias: string; htmlConverter?: string; contentType?: string }
 ): Promise<void> {
@@ -27,7 +27,7 @@ export async function addCommand(
       ? options.contentType
       : undefined;
 
-  const path = await createWatcherFile(watchDir, options.alias, {
+  const path = await createSpecFile(specDir, options.alias, {
     url,
     htmlConverter: options.htmlConverter,
     contentType,

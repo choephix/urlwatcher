@@ -6,13 +6,13 @@ import { homedir } from "node:os";
 import { promptText, type AskFn } from "../prompt.ts";
 
 const CONFIG_FILENAME = "urlwatcher.yaml";
-const DEFAULT_DATA_DIR = "./data";
-const DEFAULT_WATCH_DIR = "./watchers";
+const DEFAULT_SNAPSHOT_DIR = "./snapshot";
+const DEFAULT_SPEC_DIR = "./targets";
 const DEFAULT_TIMEOUT_MS = 30000;
 
 type RawConfig = {
-  dataDir: string;
-  watchDir: string;
+  snapshotDir: string;
+  specDir: string;
   onChange?: string;
   defaults: {
     htmlConverter: string;
@@ -66,15 +66,15 @@ async function promptPositiveInt(
 }
 
 async function buildInitConfig(ask?: AskFn): Promise<RawConfig> {
-  const dataDir = await promptText("Data directory", DEFAULT_DATA_DIR, ask);
-  const watchDir = await promptText("Watcher directory", DEFAULT_WATCH_DIR, ask);
+  const snapshotDir = await promptText("Snapshot directory", DEFAULT_SNAPSHOT_DIR, ask);
+  const specDir = await promptText("Target spec directory", DEFAULT_SPEC_DIR, ask);
   const timeout = await promptPositiveInt("Default fetch timeout (ms)", DEFAULT_TIMEOUT_MS, ask);
   const onChange = await promptText("onChange command (optional)", "", ask);
   const fileLogPath = await promptText("File notification log path (optional)", "", ask);
 
   return ConfigSchema.parse({
-    dataDir,
-    watchDir,
+    snapshotDir,
+    specDir,
     ...(onChange === "" ? {} : { onChange }),
     defaults: {
       htmlConverter: "turndown",
@@ -126,8 +126,8 @@ export async function loadConfig(explicitPath?: string): Promise<{ config: Confi
   const base = dirname(configPath);
   const resolved = {
     ...config,
-    dataDir: resolve(base, config.dataDir),
-    watchDir: resolve(base, config.watchDir),
+    snapshotDir: resolve(base, config.snapshotDir),
+    specDir: resolve(base, config.specDir),
     notifications: config.notifications.map((n) =>
       typeof n.path === "string" ? { ...n, path: resolve(base, n.path) } : n
     ),

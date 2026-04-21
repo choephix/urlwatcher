@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-const WatcherFrontMatterSchema = z.object({
+const SpecFrontMatterSchema = z.object({
   url: z.url(),
   enabled: z.boolean().default(true),
   htmlConverter: z.string().optional(),
@@ -17,8 +17,8 @@ const NotificationEntrySchema = z
   .passthrough();
 
 const ConfigSchema = z.object({
-  dataDir: z.string(),
-  watchDir: z.string().default("./watchers"),
+  snapshotDir: z.string(),
+  specDir: z.string().default("./targets"),
   onChange: z.string().optional(),
   defaults: z
     .object({
@@ -39,12 +39,12 @@ const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
-export type WatcherFrontMatter = z.infer<typeof WatcherFrontMatterSchema>;
+export type SpecFrontMatter = z.infer<typeof SpecFrontMatterSchema>;
 
-export interface Watcher extends WatcherFrontMatter {
+export interface TargetSpec extends SpecFrontMatter {
   alias: string;
   body: string;
   filePath: string;
 }
 
-export { ConfigSchema, WatcherFrontMatterSchema };
+export { ConfigSchema, SpecFrontMatterSchema };

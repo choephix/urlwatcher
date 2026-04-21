@@ -1,21 +1,21 @@
 import { readdirSync, existsSync } from "node:fs";
 import { resolve, basename, extname } from "node:path";
 import { parse } from "yaml";
-import { WatcherFrontMatterSchema, type Watcher } from "../config/schema.ts";
+import { SpecFrontMatterSchema, type TargetSpec } from "../config/schema.ts";
 
 const ALIAS_RE = /^[a-zA-Z0-9\-_]+$/;
 
-export function parseWatcherFile(raw: string, filePath: string): Watcher {
+export function parseSpecFile(raw: string, filePath: string): TargetSpec {
   const alias = basename(filePath, extname(filePath));
   if (!ALIAS_RE.test(alias)) {
     throw new Error(
-      `Watcher filename "${basename(filePath)}" is not a valid alias (alphanumeric, hyphens, underscores only)`
+      `Target spec filename "${basename(filePath)}" is not a valid alias (alphanumeric, hyphens, underscores only)`
     );
   }
 
   const { frontMatter, body } = splitFrontMatter(raw, filePath);
   const fmRaw = parse(frontMatter) ?? {};
-  const fm = WatcherFrontMatterSchema.parse(fmRaw);
+  const fm = SpecFrontMatterSchema.parse(fmRaw);
 
   return { ...fm, alias, body, filePath };
 }
@@ -26,12 +26,12 @@ function splitFrontMatter(
 ): { frontMatter: string; body: string } {
   const normalized = raw.replace(/^\uFEFF/, "");
   if (!normalized.startsWith("---")) {
-    throw new Error(`Watcher "${filePath}" missing YAML front matter (must start with "---")`);
+    throw new Error(`Target spec "${filePath}" missing YAML front matter (must start with "---")`);
   }
   const after = normalized.slice(3);
   const end = after.search(/\n---\s*(\r?\n|$)/);
   if (end === -1) {
-    throw new Error(`Watcher "${filePath}" has unterminated front matter`);
+    throw new Error(`Target spec "${filePath}" has unterminated front matter`);
   }
   const frontMatter = after.slice(0, end).replace(/^\r?\n/, "");
   const bodyStart = end + after.slice(end).match(/\n---\s*(\r?\n|$)/)![0].length;
@@ -39,33 +39,33 @@ function splitFrontMatter(
   return { frontMatter, body };
 }
 
-export async function loadWatchers(watchDir: string): Promise<Watcher[]> {
-  if (!existsSync(watchDir)) return [];
-  const entries = readdirSync(watchDir)
+export async function loadSpecs(specDir: string): Promise<TargetSpec[]> {
+  if (!existsSync(specDir)) return [];
+  const entries = readdirSync(specDir)
     .filter((f) => f.endsWith(".md"))
     .sort();
 
-  const watchers: Watcher[] = [];
+  const specs: TargetSpec[] = [];
   for (const entry of entries) {
-    const filePath = resolve(watchDir, entry);
+    const filePath = resolve(specDir, entry);
     const raw = await Bun.file(filePath).text();
-    watchers.push(parseWatcherFile(raw, filePath));
+    specs.push(parseSpecFile(raw, filePath));
   }
 
   const seen = new Set<string>();
-  for (const w of watchers) {
+  for (const w of specs) {
     if (seen.has(w.alias)) {
-      throw new Error(`Duplicate watcher alias "${w.alias}"`);
+      throw new Error(`Duplicate target alias "${w.alias}"`);
     }
     seen.add(w.alias);
   }
-  return watchers;
+  return specs;
 }
 
-export async function loadWatcher(
-  watchDir: string,
+export async function loadSpec(
+  specDir: string,
   alias: string
-): Promise<Watcher | undefined> {
-  const all = await loadWatchers(watchDir);
+): Promise<TargetSpec | undefined> {
+  const all = await loadSpecs(specDir);
   return all.find((w) => w.alias === alias);
 }

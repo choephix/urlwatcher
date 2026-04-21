@@ -1,30 +1,30 @@
 # urlwatcher example
 
-A ready-to-run workspace demonstrating both HTML and RSS watchers, plus
-an `onChange` command that prints the watcher's instructions alongside
+A ready-to-run workspace demonstrating both HTML and RSS target specs, plus
+an `onChange` command that prints the target spec instructions alongside
 the diff.
 
 ## Contents
 
 - `urlwatcher.yaml` — config with `onChange` wired up
-- `watchers/anthropic-news.md` — HTML page → Markdown (Turndown)
-- `watchers/openrouter-models.md` — RSS feed → sorted YAML
+- `targets/anthropic-news.md` — HTML page -> Markdown (Turndown)
+- `targets/openrouter-models.md` — RSS feed -> sorted YAML
 
 ## Run it
 
 From this directory:
 
 ```sh
-bun run ../src/main.ts init        # sets up ./data as a git repo
-bun run ../src/main.ts list        # shows the two tracked watchers
+bun run ../src/main.ts init        # sets up ./snapshot as a git repo
+bun run ../src/main.ts list        # shows the two tracked target specs
 bun run ../src/main.ts check       # fetches, diffs, fires onChange
 ```
 
-The first `check` treats every watcher as changed (first snapshot).
+The first `check` treats every target as changed (first snapshot).
 Subsequent runs will be silent unless the upstream page or feed
 actually changed.
 
-`./data/` (the internal change-tracking git repo and snapshots) is
+`./snapshot/` (the internal change-tracking git repo and snapshots) is
 gitignored; it is created fresh by `init`.
 
 ## Swapping `onChange` for a real agent

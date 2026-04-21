@@ -37,48 +37,48 @@ async function runGit(cwd: string, args: string[]): Promise<GitResult> {
   return { stdout, stderr, exitCode };
 }
 
-export async function isGitRepo(dataDir: string): Promise<boolean> {
-  const result = await runGit(dataDir, ["rev-parse", "--git-dir"]);
+export async function isGitRepo(snapshotDir: string): Promise<boolean> {
+  const result = await runGit(snapshotDir, ["rev-parse", "--git-dir"]);
   if (result.exitCode !== 0) return false;
   // Ensure the .git dir belongs to this directory, not a parent repo
   const gitDir = result.stdout.trim();
   return gitDir === ".git";
 }
 
-export async function gitInit(dataDir: string): Promise<void> {
-  const result = await runGit(dataDir, ["init"]);
+export async function gitInit(snapshotDir: string): Promise<void> {
+  const result = await runGit(snapshotDir, ["init"]);
   if (result.exitCode !== 0) {
     throw new Error(`git init failed: ${result.stderr}`);
   }
   // Set local identity so commits work even without global git config
-  await runGit(dataDir, ["config", "user.email", "urlwatcher@localhost"]);
-  await runGit(dataDir, ["config", "user.name", "urlwatcher"]);
+  await runGit(snapshotDir, ["config", "user.email", "urlwatcher@localhost"]);
+  await runGit(snapshotDir, ["config", "user.name", "urlwatcher"]);
 }
 
-export async function gitAdd(dataDir: string, files: string[]): Promise<void> {
+export async function gitAdd(snapshotDir: string, files: string[]): Promise<void> {
   if (files.length === 0) return;
-  const result = await runGit(dataDir, ["add", ...files]);
+  const result = await runGit(snapshotDir, ["add", ...files]);
   if (result.exitCode !== 0) {
     throw new Error(`git add failed: ${result.stderr}`);
   }
 }
 
-export async function gitAddAll(dataDir: string): Promise<void> {
-  const result = await runGit(dataDir, ["add", "-A"]);
+export async function gitAddAll(snapshotDir: string): Promise<void> {
+  const result = await runGit(snapshotDir, ["add", "-A"]);
   if (result.exitCode !== 0) {
     throw new Error(`git add -A failed: ${result.stderr}`);
   }
 }
 
-export async function gitDiffCached(dataDir: string): Promise<string> {
-  const result = await runGit(dataDir, ["diff", "--cached", "--word-diff=plain"]);
+export async function gitDiffCached(snapshotDir: string): Promise<string> {
+  const result = await runGit(snapshotDir, ["diff", "--cached", "--word-diff=plain"]);
   return result.stdout;
 }
 
 export async function gitDiffCachedNumstat(
-  dataDir: string
+  snapshotDir: string
 ): Promise<Map<string, { added: number; removed: number }>> {
-  const result = await runGit(dataDir, ["diff", "--cached", "--numstat"]);
+  const result = await runGit(snapshotDir, ["diff", "--cached", "--numstat"]);
   const map = new Map<string, { added: number; removed: number }>();
   for (const line of result.stdout.split("\n")) {
     if (!line.trim()) continue;
@@ -92,38 +92,38 @@ export async function gitDiffCachedNumstat(
   return map;
 }
 
-export async function gitResetHead(dataDir: string): Promise<void> {
-  await runGit(dataDir, ["reset", "HEAD"]);
+export async function gitResetHead(snapshotDir: string): Promise<void> {
+  await runGit(snapshotDir, ["reset", "HEAD"]);
 }
 
-export async function gitCommit(dataDir: string, message: string): Promise<string> {
-  const result = await runGit(dataDir, ["commit", "-m", message]);
+export async function gitCommit(snapshotDir: string, message: string): Promise<string> {
+  const result = await runGit(snapshotDir, ["commit", "-m", message]);
   if (result.exitCode !== 0) {
     throw new Error(`git commit failed: ${result.stderr}`);
   }
-  const hashResult = await runGit(dataDir, ["rev-parse", "HEAD"]);
+  const hashResult = await runGit(snapshotDir, ["rev-parse", "HEAD"]);
   return hashResult.stdout.trim();
 }
 
-export async function gitStatus(dataDir: string): Promise<string> {
-  const result = await runGit(dataDir, ["status", "--porcelain"]);
+export async function gitStatus(snapshotDir: string): Promise<string> {
+  const result = await runGit(snapshotDir, ["status", "--porcelain"]);
   return result.stdout;
 }
 
-export async function isClean(dataDir: string): Promise<boolean> {
-  const status = await gitStatus(dataDir);
+export async function isClean(snapshotDir: string): Promise<boolean> {
+  const status = await gitStatus(snapshotDir);
   return status.trim() === "";
 }
 
-export async function gitRestoreFiles(dataDir: string, files: string[]): Promise<void> {
+export async function gitRestoreFiles(snapshotDir: string, files: string[]): Promise<void> {
   if (files.length === 0) return;
-  await runGit(dataDir, ["checkout", "HEAD", "--", ...files]);
+  await runGit(snapshotDir, ["checkout", "HEAD", "--", ...files]);
 }
 
-export async function gitCleanFiles(dataDir: string, files: string[]): Promise<void> {
+export async function gitCleanFiles(snapshotDir: string, files: string[]): Promise<void> {
   if (files.length === 0) return;
   const { unlinkSync } = await import("node:fs");
   for (const file of files) {
-    try { unlinkSync(resolve(dataDir, file)); } catch {}
+    try { unlinkSync(resolve(snapshotDir, file)); } catch {}
   }
 }

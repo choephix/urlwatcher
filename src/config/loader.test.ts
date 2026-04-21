@@ -20,14 +20,14 @@ describe("ensureConfigForInit", () => {
       expect(existsSync(configPath)).toBe(true);
 
       const raw = readFileSync(configPath, "utf8");
-      expect(raw).toContain("dataDir: ./data");
-      expect(raw).toContain("watchDir: ./watchers");
+      expect(raw).toContain("snapshotDir: ./snapshot");
+      expect(raw).toContain("specDir: ./targets");
       expect(raw).toContain("timeout: 30000");
       expect(raw).not.toContain("onChange:");
       expect(raw).not.toContain("type: file");
 
-      expect(config.dataDir).toBe(join(dir, "data"));
-      expect(config.watchDir).toBe(join(dir, "watchers"));
+      expect(config.snapshotDir).toBe(join(dir, "snapshot"));
+      expect(config.specDir).toBe(join(dir, "targets"));
       expect(config.notifications).toEqual([{ type: "stdout" }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -41,7 +41,7 @@ describe("ensureConfigForInit", () => {
       const configPath = join(dir, "urlwatcher.yaml");
       const answers = [
         "./snapshots",
-        "./feeds",
+        "./targets",
         "45000",
         "my-agent --diff {{diff}} --instructions {{body}}",
         "./runs.log",
@@ -55,16 +55,16 @@ describe("ensureConfigForInit", () => {
       expect(created).toBe(true);
 
       const raw = readFileSync(configPath, "utf8");
-      expect(raw).toContain("dataDir: ./snapshots");
-      expect(raw).toContain("watchDir: ./feeds");
+      expect(raw).toContain("snapshotDir: ./snapshots");
+      expect(raw).toContain("specDir: ./targets");
       expect(raw).toContain("timeout: 45000");
       expect(raw).toContain("onChange: my-agent --diff {{diff}} --instructions {{body}}");
       expect(raw).toContain("- type: stdout");
       expect(raw).toContain("- type: file");
       expect(raw).toContain("path: ./runs.log");
 
-      expect(config.dataDir).toBe(join(dir, "snapshots"));
-      expect(config.watchDir).toBe(join(dir, "feeds"));
+      expect(config.snapshotDir).toBe(join(dir, "snapshots"));
+      expect(config.specDir).toBe(join(dir, "targets"));
       expect(config.notifications).toEqual([
         { type: "stdout" },
         { type: "file", path: join(dir, "runs.log") },
@@ -84,8 +84,8 @@ describe("ensureConfigForInit", () => {
       await Bun.write(
         configPath,
         [
-          "dataDir: ./existing-data",
-          "watchDir: ./existing-watchers",
+          "snapshotDir: ./existing-snapshots",
+          "specDir: ./existing-targets",
           "defaults:",
           "  timeout: 12345",
         ].join("\n") + "\n"
@@ -99,8 +99,8 @@ describe("ensureConfigForInit", () => {
 
       expect(created).toBe(false);
       expect(prompted).toBe(false);
-      expect(config.dataDir).toBe(join(dir, "existing-data"));
-      expect(config.watchDir).toBe(join(dir, "existing-watchers"));
+      expect(config.snapshotDir).toBe(join(dir, "existing-snapshots"));
+      expect(config.specDir).toBe(join(dir, "existing-targets"));
       expect(config.defaults.timeout).toBe(12345);
     } finally {
       rmSync(dir, { recursive: true, force: true });

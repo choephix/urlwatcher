@@ -1,22 +1,22 @@
 import { resolve } from "node:path";
 import type { Config } from "../config/schema.ts";
 import { loadState } from "../state.ts";
-import { loadWatchers } from "../watchers/loader.ts";
+import { loadSpecs } from "../specs/loader.ts";
 
 export async function listCommand(config: Config): Promise<void> {
-  const watchers = await loadWatchers(config.watchDir);
+  const specs = await loadSpecs(config.specDir);
 
-  if (watchers.length === 0) {
+  if (specs.length === 0) {
     console.log(
-      `No watchers found in ${config.watchDir}. Add some with: urlwatcher add <url> --alias <name>`
+      `No target specs found in ${config.specDir}. Add some with: urlwatcher add <url> --alias <name>`
     );
     return;
   }
 
-  const state = await loadState(resolve(config.dataDir));
+  const state = await loadState(resolve(config.snapshotDir));
 
-  console.log(`Tracking ${watchers.length} URL(s):\n`);
-  for (const w of watchers) {
+  console.log(`Tracking ${specs.length} URL(s):\n`);
+  for (const w of specs) {
     const converter =
       w.contentType === "json"
         ? (w.jsonConverter ?? config.defaults.jsonConverter)

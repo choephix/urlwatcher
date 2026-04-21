@@ -1,9 +1,10 @@
-dataDir: ./data
-watchDir: ./watchers
+snapshotDir: ./snapshot
+specDir: ./targets
 # onChange: "my-agent --diff-file {{diff}} --instructions-file {{body}}"
 defaults:
   htmlConverter: turndown
   jsonConverter: yaml
+  rssConverter: rss
   timeout: 30000
 notifications:
   - type: stdout

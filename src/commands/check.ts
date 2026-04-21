@@ -1,12 +1,12 @@
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import type { Config, Watcher } from "../config/schema.ts";
+import type { Config, TargetSpec } from "../config/schema.ts";
 import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
 import { getConverter } from "../converters/registry.ts";
 import { loadState, saveState } from "../state.ts";
 import { acquireLock } from "../lock.ts";
-import { loadWatchers } from "../watchers/loader.ts";
+import { loadSpecs } from "../specs/loader.ts";
 import {
   isGitRepo,
   isClean,
@@ -32,29 +32,29 @@ export async function checkCommand(
   alias?: string,
   dryRun = false
 ): Promise<CheckResult[]> {
-  const dataDir = resolve(config.dataDir);
+  const snapshotDir = resolve(config.snapshotDir);
 
-  if (!(await isGitRepo(dataDir))) {
+  if (!(await isGitRepo(snapshotDir))) {
     throw new Error(
-      `Data directory is not a git repo: ${dataDir}\nRun "urlwatcher init" first.`
+      `Snapshot directory is not a git repo: ${snapshotDir}\nRun "urlwatcher init" first.`
     );
   }
 
-  if (!(await isClean(dataDir))) {
-    const status = await gitStatus(dataDir);
-    console.log(`Data directory has uncommitted changes: ${dataDir}`);
+  if (!(await isClean(snapshotDir))) {
+    const status = await gitStatus(snapshotDir);
+    console.log(`Snapshot directory has uncommitted changes: ${snapshotDir}`);
     console.log(status.trimEnd());
     const shouldCommit = await confirm('Commit them as "manual changes" and continue?', false);
     if (!shouldCommit) {
       throw new Error("Aborted. Please commit or discard the changes before running check.");
     }
-    await gitAddAll(dataDir);
-    await gitCommit(dataDir, "manual changes");
+    await gitAddAll(snapshotDir);
+    await gitCommit(snapshotDir, "manual changes");
   }
 
-  const releaseLock = acquireLock(dataDir);
+  const releaseLock = acquireLock(snapshotDir);
   try {
-    return await checkCommandLocked(config, dataDir, alias, dryRun);
+    return await checkCommandLocked(config, snapshotDir, alias, dryRun);
   } finally {
     releaseLock();
   }
@@ -62,36 +62,36 @@ export async function checkCommand(
 
 async function checkCommandLocked(
   config: Config,
-  dataDir: string,
+  snapshotDir: string,
   alias?: string,
   dryRun = false
 ): Promise<CheckResult[]> {
-  const allWatchers = await loadWatchers(config.watchDir);
+  const allSpecs = await loadSpecs(config.specDir);
   const selected = alias
-    ? allWatchers.filter((w) => w.alias === alias)
-    : allWatchers;
+    ? allSpecs.filter((w) => w.alias === alias)
+    : allSpecs;
 
   if (alias && selected.length === 0) {
-    throw new Error(`No watcher with alias "${alias}" in ${config.watchDir}`);
+    throw new Error(`No target spec with alias "${alias}" in ${config.specDir}`);
   }
 
-  const watchers = selected.filter((w) => w.enabled);
+  const specs = selected.filter((w) => w.enabled);
   const skipped = selected.filter((w) => !w.enabled).map((w) => w.alias);
   if (skipped.length > 0) {
     console.log(`Skipping disabled: ${skipped.join(", ")}`);
   }
 
-  if (watchers.length === 0) {
+  if (specs.length === 0) {
     if (selected.length === 0) {
       console.log(
-        `No watchers to check. Add some with: urlwatcher add <url> --alias <name>`
+        `No target specs to check. Add some with: urlwatcher add <url> --alias <name>`
       );
     }
     return [];
   }
 
   const results = await Promise.all(
-    watchers.map((w) => processWatcher(w, config, dataDir))
+    specs.map((w) => processSpec(w, config, snapshotDir))
   );
   const writtenFiles = results
     .filter((r) => !r.error)
@@ -101,14 +101,14 @@ async function checkCommandLocked(
 
   if (writtenFiles.length === 0) {
     if (!dryRun) {
-      const state = await loadState(dataDir);
+      const state = await loadState(snapshotDir);
       for (const r of results) {
         if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
       }
-      await saveState(dataDir, state);
-      await gitAdd(dataDir, [".state.yaml"]);
-      await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
-        gitResetHead(dataDir);
+      await saveState(snapshotDir, state);
+      await gitAdd(snapshotDir, [".state.yaml"]);
+      await gitCommit(snapshotDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(snapshotDir);
       });
     }
     return results;
@@ -118,35 +118,35 @@ async function checkCommandLocked(
     const r = results.find((r) => r.alias === a)!;
     return `${a}.${r.extension}`;
   });
-  await gitAdd(dataDir, filenames);
+  await gitAdd(snapshotDir, filenames);
 
-  const numstat = await gitDiffCachedNumstat(dataDir);
+  const numstat = await gitDiffCachedNumstat(snapshotDir);
   if (numstat.size === 0) {
-    await gitResetHead(dataDir);
+    await gitResetHead(snapshotDir);
     for (const r of results) {
       if (!r.error) r.changed = false;
     }
     if (!dryRun) {
-      const state = await loadState(dataDir);
+      const state = await loadState(snapshotDir);
       for (const r of results) {
         if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
       }
-      await saveState(dataDir, state);
-      await gitAdd(dataDir, [".state.yaml"]);
-      await gitCommit(dataDir, `urlwatcher: Update state — ${now}`).catch(() => {
-        gitResetHead(dataDir);
+      await saveState(snapshotDir, state);
+      await gitAdd(snapshotDir, [".state.yaml"]);
+      await gitCommit(snapshotDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(snapshotDir);
       });
     } else {
-      await gitResetHead(dataDir);
+      await gitResetHead(snapshotDir);
       const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
       const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
-      await gitRestoreFiles(dataDir, existingFiles);
-      await gitCleanFiles(dataDir, newFiles);
+      await gitRestoreFiles(snapshotDir, existingFiles);
+      await gitCleanFiles(snapshotDir, newFiles);
     }
     return results;
   }
 
-  const fullDiff = await gitDiffCached(dataDir);
+  const fullDiff = await gitDiffCached(snapshotDir);
 
   for (const r of results) {
     if (r.error) continue;
@@ -160,59 +160,59 @@ async function checkCommandLocked(
   }
 
   if (dryRun) {
-    await gitResetHead(dataDir);
+    await gitResetHead(snapshotDir);
     const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
     const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
-    await gitRestoreFiles(dataDir, existingFiles);
-    await gitCleanFiles(dataDir, newFiles);
+    await gitRestoreFiles(snapshotDir, existingFiles);
+    await gitCleanFiles(snapshotDir, newFiles);
   } else {
-    const state = await loadState(dataDir);
+    const state = await loadState(snapshotDir);
     for (const r of results) {
       if (!r.error) {
         state[r.alias] = { ...state[r.alias], lastChecked: now };
         if (r.changed) state[r.alias]!.lastChanged = now;
       }
     }
-    await saveState(dataDir, state);
-    await gitAdd(dataDir, [".state.yaml"]);
+    await saveState(snapshotDir, state);
+    await gitAdd(snapshotDir, [".state.yaml"]);
 
     const changedAliases = results.filter((r) => r.changed).map((r) => r.alias);
     const message = `urlwatcher: Update ${changedAliases.join(", ")} — ${now}`;
-    await gitCommit(dataDir, message);
+    await gitCommit(snapshotDir, message);
   }
 
   return results;
 }
 
-async function processWatcher(
-  watcher: Watcher,
+async function processSpec(
+  spec: TargetSpec,
   config: Config,
-  dataDir: string
+  snapshotDir: string
 ): Promise<CheckResult> {
   const result: CheckResult = {
-    alias: watcher.alias,
-    url: watcher.url,
+    alias: spec.alias,
+    url: spec.url,
     changed: false,
-    body: watcher.body,
+    body: spec.body,
   };
 
   try {
-    const timeout = watcher.timeout ?? config.defaults.timeout;
-    const type = watcher.contentType;
+    const timeout = spec.timeout ?? config.defaults.timeout;
+    const type = spec.contentType;
 
     const initialExt = type === "html" || !type ? "md" : "yaml";
-    const initialPath = resolve(dataDir, `${watcher.alias}.${initialExt}`);
+    const initialPath = resolve(snapshotDir, `${spec.alias}.${initialExt}`);
     result.isNew = !existsSync(initialPath);
 
-    let converterName = pickConverter(type, watcher, config);
+    let converterName = pickConverter(type, spec, config);
     let converter = getConverter(converterName);
     let body = "";
     let contentType = "";
 
     if (!converter.handlesOwnFetching) {
-      const fetched = await fetchUrl(watcher.url, timeout);
+      const fetched = await fetchUrl(spec.url, timeout);
       if (!fetched.ok) {
-        console.warn(`  ⚠ ${watcher.alias}: ${fetched.error}`);
+        console.warn(`  ⚠ ${spec.alias}: ${fetched.error}`);
         result.error = fetched.error;
         return result;
       }
@@ -222,21 +222,21 @@ async function processWatcher(
       if (!type) {
         const detected = detectContentType(contentType, body);
         if (detected !== "html") {
-          converterName = pickConverter(detected, watcher, config);
+          converterName = pickConverter(detected, spec, config);
           converter = getConverter(converterName);
         }
       }
     }
 
-    const converted = await converter.convert(watcher.url, body, contentType, { timeout });
-    const outPath = resolve(dataDir, `${watcher.alias}.${converted.extension}`);
+    const converted = await converter.convert(spec.url, body, contentType, { timeout });
+    const outPath = resolve(snapshotDir, `${spec.alias}.${converted.extension}`);
     result.isNew = !existsSync(outPath);
     await Bun.write(outPath, converted.content);
     result.extension = converted.extension;
 
     return result;
   } catch (err: any) {
-    console.warn(`  ⚠ ${watcher.alias}: ${err.message}`);
+    console.warn(`  ⚠ ${spec.alias}: ${err.message}`);
     result.error = err.message;
     return result;
   }
@@ -244,12 +244,12 @@ async function processWatcher(
 
 function pickConverter(
   type: "html" | "json" | "rss" | undefined,
-  watcher: Watcher,
+  spec: TargetSpec,
   config: Config
 ): string {
-  if (type === "json") return watcher.jsonConverter ?? config.defaults.jsonConverter;
-  if (type === "rss") return watcher.rssConverter ?? config.defaults.rssConverter;
-  return watcher.htmlConverter ?? config.defaults.htmlConverter;
+  if (type === "json") return spec.jsonConverter ?? config.defaults.jsonConverter;
+  if (type === "rss") return spec.rssConverter ?? config.defaults.rssConverter;
+  return spec.htmlConverter ?? config.defaults.htmlConverter;
 }
 
 function extractFileDiff(fullDiff: string, alias: string): string {

@@ -20,10 +20,10 @@ const program = new Command()
 
 program
   .command("init")
-  .description("Initialize the data directory as a git repo and create the watcher directory")
+  .description("Initialize the snapshot directory as a git repo and create the target spec directory")
   .action(async () => {
     const { config } = await ensureConfigForInit(program.opts().config);
-    await initCommand(config.dataDir, config.watchDir);
+    await initCommand(config.snapshotDir, config.specDir);
   });
 
 program
@@ -60,13 +60,13 @@ program
 
 program
   .command("add <url>")
-  .description("Add a URL to track (creates a watcher Markdown file)")
+  .description("Add a URL to track (creates a target spec Markdown file)")
   .requiredOption("-a, --alias <name>", "Alias for this URL")
   .option("--html-converter <name>", "HTML converter to use (turndown, jina)")
   .option("--content-type <type>", "Force content type (html, json)")
   .action(async (url: string, opts: any) => {
     const { config } = await loadConfig(program.opts().config);
-    await addCommand(config.watchDir, url, {
+    await addCommand(config.specDir, url, {
       alias: opts.alias,
       htmlConverter: opts.htmlConverter,
       contentType: opts.contentType,
@@ -75,10 +75,10 @@ program
 
 program
   .command("remove <alias>")
-  .description("Stop tracking a URL (deletes its watcher Markdown file)")
+  .description("Stop tracking a URL (deletes its target spec Markdown file)")
   .action(async (alias: string) => {
     const { config } = await loadConfig(program.opts().config);
-    await removeCommand(config.watchDir, alias);
+    await removeCommand(config.specDir, alias);
   });
 
 program

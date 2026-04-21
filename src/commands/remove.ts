@@ -1,12 +1,12 @@
-import { deleteWatcherFile } from "../watchers/writer.ts";
+import { deleteSpecFile } from "../specs/writer.ts";
 
 export async function removeCommand(
-  watchDir: string,
+  specDir: string,
   alias: string
 ): Promise<void> {
-  const removed = deleteWatcherFile(watchDir, alias);
+  const removed = deleteSpecFile(specDir, alias);
   if (!removed) {
-    throw new Error(`No watcher with alias "${alias}"`);
+    throw new Error(`No target spec with alias "${alias}"`);
   }
   console.log(`Removed "${alias}"`);
 }

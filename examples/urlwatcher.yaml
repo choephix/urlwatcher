@@ -1,5 +1,5 @@
-dataDir: ./data
-watchDir: ./watchers
+snapshotDir: ./snapshot
+specDir: ./targets
 
 # {{diff}} and {{body}} expand to paths to temp files holding the
 # content, so the command can cat them (or pass the paths to a tool).

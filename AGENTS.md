@@ -6,7 +6,7 @@ After completing every individual task — whether that is an entire user prompt
 
 Every user prompt must result in one or more commits.
 
-Note: This tool manages its own git repository inside `dataDir` for change tracking. Never confuse that internal repo with the project's own development git workflow.
+Note: This tool manages its own git repository inside `snapshotDir` for change tracking. Never confuse that internal repo with the project's own development git workflow.
 
 ## Runtime
 

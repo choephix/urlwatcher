@@ -12,8 +12,8 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-export function acquireLock(dataDir: string): () => void {
-  const lockPath = resolve(dataDir, LOCK_FILENAME);
+export function acquireLock(snapshotDir: string): () => void {
+  const lockPath = resolve(snapshotDir, LOCK_FILENAME);
 
   try {
     const fd = openSync(lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
@@ -30,7 +30,7 @@ export function acquireLock(dataDir: string): () => void {
 
     if (existingPid && isProcessAlive(existingPid)) {
       throw new Error(
-        `Another urlwatcher process (PID ${existingPid}) is already running on this data directory.`
+        `Another urlwatcher process (PID ${existingPid}) is already running on this snapshot directory.`
       );
     }
 
