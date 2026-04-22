@@ -21,6 +21,7 @@ import {
   gitCleanFiles,
 } from "../git/operations.ts";
 import { confirm } from "../prompt.ts";
+import { extractDiffForPaths } from "../diff.ts";
 
 import "../converters/yaml-converter.ts";
 import "../converters/turndown.ts";
@@ -154,7 +155,7 @@ async function checkCommandLocked(
     const counts = numstat.get(filename);
     if (!counts) continue;
     r.changed = true;
-    r.diff = extractFileDiff(fullDiff, r.alias);
+    r.diff = extractDiffForPaths(fullDiff, [filename]);
     r.added = counts.added;
     r.removed = counts.removed;
   }
@@ -250,28 +251,4 @@ function pickConverter(
   if (type === "json") return spec.jsonConverter ?? config.defaults.jsonConverter;
   if (type === "rss") return spec.rssConverter ?? config.defaults.rssConverter;
   return spec.htmlConverter ?? config.defaults.htmlConverter;
-}
-
-function extractFileDiff(fullDiff: string, alias: string): string {
-  const lines = fullDiff.split("\n");
-  const chunks: string[] = [];
-  let capturing = false;
-
-  for (const line of lines) {
-    if (line.startsWith("diff --git")) {
-      capturing = line.includes(`/${alias}.`);
-      continue;
-    }
-    if (!capturing) continue;
-    if (
-      line.startsWith("index ") ||
-      line.startsWith("--- ") ||
-      line.startsWith("+++ ") ||
-      line.startsWith("new file mode") ||
-      line.startsWith("\\ No newline")
-    ) continue;
-    chunks.push(line);
-  }
-
-  return chunks.join("\n").trim();
 }

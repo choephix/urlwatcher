@@ -18,11 +18,16 @@ From this directory:
 bun run ../src/main.ts init        # sets up ./snapshot as a git repo
 bun run ../src/main.ts list        # shows the two tracked target specs
 bun run ../src/main.ts check       # fetches, diffs, fires onChange
+bun run ../src/main.ts check --replay  # replays newest stored diffs through onChange
 ```
 
 The first `check` treats every target as changed (first snapshot).
 Subsequent runs will be silent unless the upstream page or feed
 actually changed.
+
+`check --replay` is the opposite of a live run: it does not fetch or
+write anything, and instead feeds the newest historical snapshot diff
+for each selected alias back through the configured `onChange` command.
 
 `./snapshot/` (the internal change-tracking git repo and snapshots) is
 gitignored; it is created fresh by `init`.

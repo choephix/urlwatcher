@@ -75,6 +75,40 @@ export async function gitDiffCached(snapshotDir: string): Promise<string> {
   return result.stdout;
 }
 
+export async function gitLogForPaths(snapshotDir: string, files: string[]): Promise<string[]> {
+  if (files.length === 0) return [];
+  const result = await runGit(snapshotDir, ["log", "--format=%H", "--", ...files]);
+  if (result.exitCode !== 0) {
+    throw new Error(`git log failed: ${result.stderr}`);
+  }
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export async function gitShowDiffForPaths(
+  snapshotDir: string,
+  rev: string,
+  files: string[]
+): Promise<string> {
+  if (files.length === 0) return "";
+  const result = await runGit(snapshotDir, [
+    "show",
+    "--format=",
+    "--word-diff=plain",
+    "--find-renames",
+    "--root",
+    rev,
+    "--",
+    ...files,
+  ]);
+  if (result.exitCode !== 0) {
+    throw new Error(`git show failed: ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
 export async function gitDiffCachedNumstat(
   snapshotDir: string
 ): Promise<Map<string, { added: number; removed: number }>> {

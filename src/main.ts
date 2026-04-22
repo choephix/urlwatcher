@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { ensureConfigForInit, loadConfig } from "./config/loader.ts";
 import { initCommand } from "./commands/init.ts";
 import { checkCommand } from "./commands/check.ts";
+import { replayCommand } from "./commands/replay.ts";
 import { addCommand } from "./commands/add.ts";
 import { removeCommand } from "./commands/remove.ts";
 import { listCommand } from "./commands/list.ts";
@@ -30,8 +31,26 @@ program
   .command("check [alias]")
   .description("Check tracked URLs for changes")
   .option("-n, --dry-run", "Fetch and diff but don't commit or update state")
-  .action(async (alias: string | undefined, opts: { dryRun?: boolean }) => {
+  .option("--replay", "Run onChange against the newest historical diff instead of fetching live")
+  .action(async (alias: string | undefined, opts: { dryRun?: boolean; replay?: boolean }) => {
     const { config } = await loadConfig(program.opts().config);
+
+    if (opts.dryRun && opts.replay) {
+      throw new Error("--dry-run and --replay cannot be used together.");
+    }
+
+    if (opts.replay) {
+      if (!config.onChange) {
+        throw new Error("Replay mode requires `onChange` to be configured.");
+      }
+
+      const contexts = await replayCommand(config, alias);
+      for (const ctx of contexts) {
+        await runOnChange(config.onChange, ctx);
+      }
+      return;
+    }
+
     const timestamp = new Date();
     const results = await checkCommand(config, alias, opts.dryRun);
 

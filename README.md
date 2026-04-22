@@ -56,6 +56,7 @@ If a fetch fails, the target is reported as an error and the previous stored sna
 - Optional free-form spec body passed to downstream automation
 - Built-in `stdout` and append-to-file notifications
 - `--dry-run` mode for fetch/diff without committing
+- `--replay` mode for running `onChange` against the newest historical diff
 - Disabled targets via front matter
 - Locking to avoid overlapping checks against the same `snapshotDir`
 
@@ -123,6 +124,8 @@ bun run src/main.ts check
 urlwatcher init
 urlwatcher check
 urlwatcher check <alias>
+urlwatcher check --replay
+urlwatcher check <alias> --replay
 urlwatcher add <url> --alias <name>
 urlwatcher remove <alias>
 urlwatcher list
@@ -143,6 +146,7 @@ Config lookup order when `--config` is omitted:
 
 ```txt
 -n, --dry-run          fetch and diff, but do not commit or keep changes
+--replay               run onChange with the newest historical diff instead of fetching live
 ```
 
 Notes:
@@ -150,6 +154,8 @@ Notes:
 - `check` can run against all target specs or a single alias
 - disabled targets are skipped and reported
 - if `snapshotDir` already has uncommitted changes, the CLI prompts whether to commit them as `manual changes` before continuing
+- `--replay` is read-only: no fetches, snapshot writes, state updates, notifications, or commits
+- `--replay` requires `onChange` to be configured and cannot be combined with `--dry-run`
 
 ### `add`
 
@@ -318,6 +324,26 @@ onChange: |
 ```
 
 The command runs via `sh -c` with environment variables populated for the placeholder values, and temporary files are removed when the command exits.
+
+### Historical replay
+
+If you want to test the real `onChange` command without hitting the network, use replay mode:
+
+```sh
+bun run src/main.ts check --replay
+bun run src/main.ts check blog --replay
+```
+
+Replay mode scans backward through the internal snapshot git history for each selected alias and picks the newest commit that contains a real textual diff for that alias's snapshot file. It then runs `onChange` with that historical diff and the current target spec body.
+
+Replay mode is intentionally read-only:
+
+- no live fetches
+- no snapshot updates
+- no `.state.yaml` writes
+- no notifications
+- no commits
+- no file logging
 
 ## State Tracking
 
