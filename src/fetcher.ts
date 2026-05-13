@@ -3,12 +3,11 @@ import type { FetchResult } from "./types.ts";
 const MAX_BODY_SIZE = 5 * 1024 * 1024; // 5MB
 
 export async function fetchUrl(url: string, timeout: number): Promise<FetchResult> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
 
+  try {
     const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
 
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
@@ -31,6 +30,8 @@ export async function fetchUrl(url: string, timeout: number): Promise<FetchResul
       return { ok: false, error: `Timeout after ${timeout}ms` };
     }
     return { ok: false, error: err.message ?? String(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
