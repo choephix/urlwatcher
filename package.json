@@ -5,6 +5,8 @@
     "urlwatcher": "./src/main.ts"
   },
   "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "example:init": "bun run src/main.ts -c examples/urlwatcher.yaml init",
     "example": "bun run src/main.ts -c examples/urlwatcher.yaml check",
     "example:dry": "bun run src/main.ts -c examples/urlwatcher.yaml check --dry-run"
