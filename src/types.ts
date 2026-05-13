@@ -18,4 +18,5 @@ export interface CheckResult {
   error?: string;
   extension?: string;
   body?: string;
+  staleSnapshotFiles?: string[];
 }

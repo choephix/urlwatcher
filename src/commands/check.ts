@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import type { Config, TargetSpec } from "../config/schema.ts";
 import type { CheckResult } from "../types.ts";
 import { fetchUrl, detectContentType } from "../fetcher.ts";
@@ -115,9 +115,9 @@ async function checkCommandLocked(
     return results;
   }
 
-  const filenames = writtenFiles.map((a) => {
+  const filenames = writtenFiles.flatMap((a) => {
     const r = results.find((r) => r.alias === a)!;
-    return `${a}.${r.extension}`;
+    return [`${a}.${r.extension}`, ...(r.staleSnapshotFiles ?? [])];
   });
   await gitAdd(snapshotDir, filenames);
 
@@ -139,7 +139,7 @@ async function checkCommandLocked(
       });
     } else {
       await gitResetHead(snapshotDir);
-      const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+      const existingFiles = restorableSnapshotFiles(results);
       const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
       await gitRestoreFiles(snapshotDir, existingFiles);
       await gitCleanFiles(snapshotDir, newFiles);
@@ -162,7 +162,7 @@ async function checkCommandLocked(
 
   if (dryRun) {
     await gitResetHead(snapshotDir);
-    const existingFiles = results.filter((r) => !r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
+    const existingFiles = restorableSnapshotFiles(results);
     const newFiles = results.filter((r) => r.isNew && !r.error).map((r) => `${r.alias}.${r.extension}`);
     await gitRestoreFiles(snapshotDir, existingFiles);
     await gitCleanFiles(snapshotDir, newFiles);
@@ -183,6 +183,15 @@ async function checkCommandLocked(
   }
 
   return results;
+}
+
+function restorableSnapshotFiles(results: CheckResult[]): string[] {
+  return results
+    .filter((r) => !r.error)
+    .flatMap((r) => [
+      ...(!r.isNew ? [`${r.alias}.${r.extension}`] : []),
+      ...(r.staleSnapshotFiles ?? []),
+    ]);
 }
 
 async function processSpec(
@@ -234,6 +243,11 @@ async function processSpec(
     result.isNew = !existsSync(outPath);
     await Bun.write(outPath, converted.content);
     result.extension = converted.extension;
+    result.staleSnapshotFiles = removeStaleSnapshotFiles(
+      snapshotDir,
+      spec.alias,
+      converted.extension
+    );
 
     return result;
   } catch (err: any) {
@@ -241,6 +255,23 @@ async function processSpec(
     result.error = err.message;
     return result;
   }
+}
+
+function removeStaleSnapshotFiles(
+  snapshotDir: string,
+  alias: string,
+  activeExtension: "md" | "yaml"
+): string[] {
+  const staleFiles: string[] = [];
+  for (const extension of ["md", "yaml"] as const) {
+    if (extension === activeExtension) continue;
+    const filename = `${alias}.${extension}`;
+    const path = resolve(snapshotDir, filename);
+    if (!existsSync(path)) continue;
+    unlinkSync(path);
+    staleFiles.push(filename);
+  }
+  return staleFiles;
 }
 
 function pickConverter(
