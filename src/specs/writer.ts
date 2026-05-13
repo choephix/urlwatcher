@@ -1,7 +1,7 @@
 import { mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { stringify } from "yaml";
-import type { SpecFrontMatter } from "../config/schema.ts";
+import type { SpecFrontMatterInput } from "../config/schema.ts";
 
 const ALIAS_RE = /^[a-zA-Z0-9\-_]+$/;
 
@@ -12,7 +12,7 @@ export function specPath(specDir: string, alias: string): string {
 export async function createSpecFile(
   specDir: string,
   alias: string,
-  frontMatter: SpecFrontMatter,
+  frontMatter: SpecFrontMatterInput,
   body = ""
 ): Promise<string> {
   if (!ALIAS_RE.test(alias)) {

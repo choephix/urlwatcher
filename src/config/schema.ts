@@ -39,6 +39,7 @@ const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+export type SpecFrontMatterInput = z.input<typeof SpecFrontMatterSchema>;
 export type SpecFrontMatter = z.infer<typeof SpecFrontMatterSchema>;
 
 export interface TargetSpec extends SpecFrontMatter {

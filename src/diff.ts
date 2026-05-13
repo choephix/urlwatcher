@@ -3,7 +3,8 @@ const GIT_DIFF_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
 function matchingPath(line: string, paths: Set<string>): boolean {
   const match = GIT_DIFF_HEADER.exec(line);
   if (!match) return false;
-  const [, fromPath, toPath] = match;
+  const fromPath = match[1]!;
+  const toPath = match[2]!;
   return paths.has(fromPath) || paths.has(toPath);
 }
 
