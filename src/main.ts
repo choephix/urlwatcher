@@ -14,6 +14,11 @@ import { runOnChange } from "./onchange.ts";
 import "./notifications/stdout.ts";
 import "./notifications/file.ts";
 
+interface OnChangeFailure {
+  alias: string;
+  code: number | null;
+}
+
 function getOnChangeTraceLogPath(
   notifications: Array<{ type: string; path?: unknown }>
 ): string | undefined {
@@ -21,6 +26,42 @@ function getOnChangeTraceLogPath(
     (entry) => entry.type === "file" && typeof entry.path === "string"
   );
   return typeof fileNotifier?.path === "string" ? fileNotifier.path : undefined;
+}
+
+async function runOnChangeForContexts(
+  command: string,
+  contexts: Array<{ alias: string; url: string; diff: string; body: string }>,
+  traceLogPath?: string
+): Promise<void> {
+  const failures: OnChangeFailure[] = [];
+
+  for (const ctx of contexts) {
+    const { code, stdout, stderr } = await runOnChange(command, ctx, { traceLogPath });
+    console.log(`[onChange:${ctx.alias}] finished with exit code ${code ?? "null"}`);
+    if (stdout) console.log(`[onChange:${ctx.alias}] stdout:\n${stdout}`);
+    if (stderr) console.warn(`[onChange:${ctx.alias}] stderr:\n${stderr}`);
+    if (code !== 0) failures.push({ alias: ctx.alias, code });
+  }
+
+  if (failures.length > 0) {
+    const summary = failures
+      .map((failure) => `${failure.alias} exited ${failure.code ?? "null"}`)
+      .join(", ");
+    throw new Error(`onChange failed: ${summary}`);
+  }
+}
+
+function changedOnChangeContexts(
+  results: Awaited<ReturnType<typeof checkCommand>>
+): Array<{ alias: string; url: string; diff: string; body: string }> {
+  return results
+    .filter((r) => r.changed)
+    .map((r) => ({
+      alias: r.alias,
+      url: r.url,
+      diff: r.diff ?? "",
+      body: r.body ?? "",
+    }));
 }
 
 const program = new Command()
@@ -54,9 +95,7 @@ program
       }
 
       const contexts = await replayCommand(config, alias);
-      for (const ctx of contexts) {
-        await runOnChange(config.onChange, ctx);
-      }
+      await runOnChangeForContexts(config.onChange, contexts);
       return;
     }
 
@@ -75,22 +114,11 @@ program
 
     if (config.onChange && !opts.dryRun) {
       const traceLogPath = getOnChangeTraceLogPath(config.notifications);
-      for (const r of results) {
-        if (!r.changed) continue;
-        const { code, stdout, stderr } = await runOnChange(
-          config.onChange,
-          {
-            alias: r.alias,
-            url: r.url,
-            diff: r.diff ?? "",
-            body: r.body ?? "",
-          },
-          { traceLogPath }
-        );
-        console.log(`[onChange:${r.alias}] finished with exit code ${code ?? "null"}`);
-        if (stdout) console.log(`[onChange:${r.alias}] stdout:\n${stdout}`);
-        if (stderr) console.warn(`[onChange:${r.alias}] stderr:\n${stderr}`);
-      }
+      await runOnChangeForContexts(
+        config.onChange,
+        changedOnChangeContexts(results),
+        traceLogPath
+      );
     }
   });
 
