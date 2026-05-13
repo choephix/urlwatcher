@@ -325,6 +325,8 @@ onChange: |
 
 The command runs via `sh -c` with environment variables populated for the placeholder values, and temporary files are removed when the command exits.
 
+If the command starts with `zo ` and `URLWATCHER_ZO_MODEL` is set, `urlwatcher` calls Zo through its API wrapper with that explicit `model_name`. This is useful for cron jobs where the default Zo model may change or hit provider-specific quota. Because `onChange` commands often perform side effects, the wrapper does not retry timed-out requests; a timed-out request may still finish server-side.
+
 ### Historical replay
 
 If you want to test the real `onChange` command without hitting the network, use replay mode:
