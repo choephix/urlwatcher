@@ -16,7 +16,7 @@ const NotificationEntrySchema = z
   })
   .passthrough();
 
-const ConfigSchema = z.object({
+const ConfigObjectSchema = z.object({
   snapshotDir: z.string(),
   specDir: z.string().default("./targets"),
   onChange: z.string().optional(),
@@ -37,6 +37,16 @@ const ConfigSchema = z.object({
     .array(NotificationEntrySchema)
     .default([{ type: "stdout" }]),
 });
+
+const ConfigSchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  return {
+    ...input,
+    snapshotDir: input.snapshotDir ?? input.dataDir,
+    specDir: input.specDir ?? input.watchDir,
+  };
+}, ConfigObjectSchema);
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type SpecFrontMatterInput = z.input<typeof SpecFrontMatterSchema>;

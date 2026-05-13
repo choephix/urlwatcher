@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureConfigForInit } from "./loader.ts";
+import { ensureConfigForInit, loadConfig } from "./loader.ts";
 
 describe("ensureConfigForInit", () => {
   test("creates a missing config using defaults when prompts are blank", async () => {
@@ -101,6 +101,30 @@ describe("ensureConfigForInit", () => {
       expect(prompted).toBe(false);
       expect(config.snapshotDir).toBe(join(dir, "existing-snapshots"));
       expect(config.specDir).toBe(join(dir, "existing-targets"));
+      expect(config.defaults.timeout).toBe(12345);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("loads legacy dataDir and watchDir config fields", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "urlwatcher-config-"));
+    try {
+      const configPath = join(dir, "urlwatcher.yaml");
+      await Bun.write(
+        configPath,
+        [
+          "dataDir: ./legacy-snapshot",
+          "watchDir: ./legacy-targets",
+          "defaults:",
+          "  timeout: 12345",
+        ].join("\n") + "\n"
+      );
+
+      const { config } = await loadConfig(configPath);
+
+      expect(config.snapshotDir).toBe(join(dir, "legacy-snapshot"));
+      expect(config.specDir).toBe(join(dir, "legacy-targets"));
       expect(config.defaults.timeout).toBe(12345);
     } finally {
       rmSync(dir, { recursive: true, force: true });
