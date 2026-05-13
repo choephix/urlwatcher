@@ -14,6 +14,15 @@ import { runOnChange } from "./onchange.ts";
 import "./notifications/stdout.ts";
 import "./notifications/file.ts";
 
+function getOnChangeTraceLogPath(
+  notifications: Array<{ type: string; path?: unknown }>
+): string | undefined {
+  const fileNotifier = notifications.find(
+    (entry) => entry.type === "file" && typeof entry.path === "string"
+  );
+  return typeof fileNotifier?.path === "string" ? fileNotifier.path : undefined;
+}
+
 const program = new Command()
   .name("urlwatcher")
   .description("Track changes to web pages and API endpoints using git")
@@ -65,14 +74,22 @@ program
     }
 
     if (config.onChange && !opts.dryRun) {
+      const traceLogPath = getOnChangeTraceLogPath(config.notifications);
       for (const r of results) {
         if (!r.changed) continue;
-        await runOnChange(config.onChange, {
-          alias: r.alias,
-          url: r.url,
-          diff: r.diff ?? "",
-          body: r.body ?? "",
-        });
+        const { code, stdout, stderr } = await runOnChange(
+          config.onChange,
+          {
+            alias: r.alias,
+            url: r.url,
+            diff: r.diff ?? "",
+            body: r.body ?? "",
+          },
+          { traceLogPath }
+        );
+        console.log(`[onChange:${r.alias}] finished with exit code ${code ?? "null"}`);
+        if (stdout) console.log(`[onChange:${r.alias}] stdout:\n${stdout}`);
+        if (stderr) console.warn(`[onChange:${r.alias}] stderr:\n${stderr}`);
       }
     }
   });
