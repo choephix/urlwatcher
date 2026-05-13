@@ -325,7 +325,7 @@ onChange: |
 
 The command runs via `sh -c` with environment variables populated for the placeholder values, and temporary files are removed when the command exits.
 
-If the command starts with `zo ` and `URLWATCHER_ZO_MODEL` is set, `urlwatcher` calls Zo through its API wrapper with that explicit `model_name`. This is useful for cron jobs where the default Zo model may change or hit provider-specific quota. Because `onChange` commands often perform side effects, the wrapper does not retry timed-out requests; a timed-out request may still finish server-side.
+If the command starts with `zo ` and `URLWATCHER_ZO_MODEL` is set, `urlwatcher` calls Zo through its API wrapper with that explicit `model_name`. This is useful for cron jobs where the default Zo model may change or hit provider-specific quota. Because `onChange` commands often perform side effects, the wrapper does not retry timed-out requests; a timed-out request may still finish server-side. The wrapper timeout defaults to 300000 ms and can be changed with `URLWATCHER_ZO_TIMEOUT_MS`.
 
 ### Historical replay
 

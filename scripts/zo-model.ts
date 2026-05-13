@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 const API_URL = "https://api.zo.computer/zo/ask";
-const REQUEST_TIMEOUT_MS = 60_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 300_000;
 
 function readFlag(name: string, required = false): string | undefined {
   const index = Bun.argv.indexOf(name);
@@ -35,9 +35,20 @@ function parseObjectJson(value: string | undefined): unknown {
   return parsed;
 }
 
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
 async function requestZo(payload: Record<string, unknown>, token: string): Promise<unknown> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutMs = readPositiveIntEnv("URLWATCHER_ZO_TIMEOUT_MS", DEFAULT_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(API_URL, {
