@@ -1,5 +1,6 @@
 {
   "name": "urlwatcher",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
     "urlwatcher": "./src/main.ts"

@@ -14,6 +14,9 @@ import { runOnChange } from "./onchange.ts";
 import "./notifications/stdout.ts";
 import "./notifications/file.ts";
 
+const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+const VERSION = typeof pkg.version === "string" ? pkg.version : "0.0.0";
+
 interface OnChangeFailure {
   alias: string;
   code: number | null;
@@ -67,6 +70,7 @@ function changedOnChangeContexts(
 const program = new Command()
   .name("urlwatcher")
   .description("Track changes to web pages and API endpoints using git")
+  .version(VERSION)
   .option("-c, --config <path>", "Path to config file");
 
 program
