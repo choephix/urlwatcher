@@ -28,8 +28,8 @@ async function appendTrace(path: string | undefined, message: string): Promise<v
     await mkdir(dirname(path), { recursive: true });
     await appendFile(path, message, "utf8");
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`  ⚠ could not write onChange trace log: ${message}`);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.warn(`  ⚠ could not write onChange trace log: ${errorMessage}`);
   }
 }
 
