@@ -1,6 +1,4 @@
-import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { appendFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, appendFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -37,89 +35,77 @@ function indent(text: string): string {
   return text.split("\n").map((line) => `    ${line}`).join("\n");
 }
 
+function expandPlaceholders(command: string): string {
+  return command
+    .replaceAll("{{diff}}", `"$${DIFF_FILE_ENV}"`)
+    .replaceAll("{{body}}", `"$${BODY_FILE_ENV}"`)
+    .replaceAll("{{alias}}", `"$${ALIAS_ENV}"`)
+    .replaceAll("{{url}}", `"$${URL_ENV}"`);
+}
+
+function rewriteForZoModel(expanded: string): string {
+  const model = process.env[ZO_MODEL_ENV];
+  if (!model || !expanded.startsWith("zo ")) return expanded;
+  return `bun ${ZO_MODEL_WRAPPER} --model "${model}" ${expanded.slice(3)}`;
+}
+
 export async function runOnChange(
   command: string,
   ctx: OnChangeContext,
   options: OnChangeOptions = {}
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const dir = mkdtempSync(join(tmpdir(), "urlwatcher-"));
+  const dir = await mkdtemp(join(tmpdir(), "urlwatcher-"));
   const diffPath = join(dir, "diff");
   const bodyPath = join(dir, "body");
-  writeFileSync(diffPath, ctx.diff);
-  writeFileSync(bodyPath, ctx.body);
+  await Bun.write(diffPath, ctx.diff);
+  await Bun.write(bodyPath, ctx.body);
 
-  const expanded = command
-    .replaceAll("{{diff}}", `"$${DIFF_FILE_ENV}"`)
-    .replaceAll("{{body}}", `"$${BODY_FILE_ENV}"`)
-    .replaceAll("{{alias}}", `"$${ALIAS_ENV}"`)
-    .replaceAll("{{url}}", `"$${URL_ENV}"`);
+  const expanded = rewriteForZoModel(expandPlaceholders(command));
+
+  await appendTrace(
+    options.traceLogPath,
+    `\n[onChange:${ctx.alias}] started at ${new Date().toISOString()}\n` +
+      `[onChange:${ctx.alias}] url: ${ctx.url}\n`
+  );
 
   try {
+    const child = Bun.spawn(["sh", "-c", expanded], {
+      cwd: join(import.meta.dir, ".."),
+      env: {
+        ...process.env,
+        [DIFF_FILE_ENV]: diffPath,
+        [BODY_FILE_ENV]: bodyPath,
+        [ALIAS_ENV]: ctx.alias,
+        [URL_ENV]: ctx.url,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+
     await appendTrace(
       options.traceLogPath,
-      `\n[onChange:${ctx.alias}] started at ${new Date().toISOString()}\n` +
-        `[onChange:${ctx.alias}] url: ${ctx.url}\n`
+      `[onChange:${ctx.alias}] finished at ${new Date().toISOString()}\n` +
+        `[onChange:${ctx.alias}] exit code: ${code ?? "null"}\n` +
+        (stdout ? `[onChange:${ctx.alias}] stdout:\n${indent(stdout)}\n` : "") +
+        (stderr ? `[onChange:${ctx.alias}] stderr:\n${indent(stderr)}\n` : "")
     );
 
-    return await new Promise((resolvePromise) => {
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
-      let settled = false;
-
-      const model = process.env[ZO_MODEL_ENV];
-      const modifiedExpanded = model && expanded.startsWith("zo ")
-        ? `bun ${ZO_MODEL_WRAPPER} --model "${model}" ${expanded.slice(3)}`
-        : expanded;
-
-      const child = spawn("sh", ["-c", modifiedExpanded], {
-        cwd: join(import.meta.dir, ".."),
-        env: {
-          ...process.env,
-          [DIFF_FILE_ENV]: diffPath,
-          [BODY_FILE_ENV]: bodyPath,
-          [ALIAS_ENV]: ctx.alias,
-          [URL_ENV]: ctx.url,
-        },
-      });
-
-      child.stdout?.on("data", (chunk: Buffer) => {
-        stdoutChunks.push(chunk);
-      });
-
-      child.stderr?.on("data", (chunk: Buffer) => {
-        stderrChunks.push(chunk);
-      });
-
-      child.on("exit", async (code) => {
-        if (settled) return;
-        settled = true;
-        const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-        const stderr = Buffer.concat(stderrChunks).toString("utf8");
-
-        await appendTrace(
-          options.traceLogPath,
-          `[onChange:${ctx.alias}] finished at ${new Date().toISOString()}\n` +
-            `[onChange:${ctx.alias}] exit code: ${code ?? "null"}\n` +
-            (stdout ? `[onChange:${ctx.alias}] stdout:\n${indent(stdout)}\n` : "") +
-            (stderr ? `[onChange:${ctx.alias}] stderr:\n${indent(stderr)}\n` : "")
-        );
-
-        resolvePromise({ code, stdout, stderr });
-      });
-
-      child.on("error", async (err) => {
-        if (settled) return;
-        settled = true;
-
-        console.warn(`  ⚠ onChange for ${ctx.alias}: spawn error: ${err.message}`);
-        await appendTrace(
-          options.traceLogPath,
-          `[onChange:${ctx.alias}] spawn error at ${new Date().toISOString()}: ${err.message}\n`
-        );
-        resolvePromise({ code: 1, stdout: "", stderr: err.message });
-      });
-    });
+    return { code, stdout, stderr };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.warn(`  ⚠ onChange for ${ctx.alias}: spawn error: ${errorMessage}`);
+    await appendTrace(
+      options.traceLogPath,
+      `[onChange:${ctx.alias}] spawn error at ${new Date().toISOString()}: ${errorMessage}\n`
+    );
+    return { code: 1, stdout: "", stderr: errorMessage };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   }
 }
