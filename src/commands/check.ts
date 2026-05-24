@@ -101,7 +101,17 @@ async function checkCommandLocked(
   const now = new Date().toISOString();
 
   if (writtenFiles.length === 0) {
-    if (!dryRun) await commitStateOnly(snapshotDir, results, now);
+    if (!dryRun) {
+      const state = await loadState(snapshotDir);
+      for (const r of results) {
+        if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
+      }
+      await saveState(snapshotDir, state);
+      await gitAdd(snapshotDir, [".state.yaml"]);
+      await gitCommit(snapshotDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(snapshotDir);
+      });
+    }
     return results;
   }
 
@@ -118,7 +128,15 @@ async function checkCommandLocked(
       if (!r.error) r.changed = false;
     }
     if (!dryRun) {
-      await commitStateOnly(snapshotDir, results, now);
+      const state = await loadState(snapshotDir);
+      for (const r of results) {
+        if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
+      }
+      await saveState(snapshotDir, state);
+      await gitAdd(snapshotDir, [".state.yaml"]);
+      await gitCommit(snapshotDir, `urlwatcher: Update state — ${now}`).catch(() => {
+        gitResetHead(snapshotDir);
+      });
     } else {
       await gitResetHead(snapshotDir);
       const existingFiles = restorableSnapshotFiles(results);
@@ -129,7 +147,11 @@ async function checkCommandLocked(
     return results;
   }
 
-  const fullDiff = await gitDiffCached(snapshotDir);
+  const changedFilenames = results
+    .filter((r) => !r.error)
+    .map((r) => `${r.alias}.${r.extension}`)
+    .filter((filename) => numstat.has(filename));
+  const fullDiff = await gitDiffCached(snapshotDir, changedFilenames);
 
   for (const r of results) {
     if (r.error) continue;
@@ -167,24 +189,6 @@ async function checkCommandLocked(
   return results;
 }
 
-async function commitStateOnly(
-  snapshotDir: string,
-  results: CheckResult[],
-  now: string
-): Promise<void> {
-  const state = await loadState(snapshotDir);
-  for (const r of results) {
-    if (!r.error) state[r.alias] = { ...state[r.alias], lastChecked: now };
-  }
-  await saveState(snapshotDir, state);
-  await gitAdd(snapshotDir, [".state.yaml"]);
-  try {
-    await gitCommit(snapshotDir, `urlwatcher: Update state — ${now}`);
-  } catch {
-    await gitResetHead(snapshotDir);
-  }
-}
-
 function restorableSnapshotFiles(results: CheckResult[]): string[] {
   return results
     .filter((r) => !r.error)
@@ -209,6 +213,10 @@ async function processSpec(
   try {
     const timeout = spec.timeout ?? config.defaults.timeout;
     const type = spec.contentType;
+
+    const initialExt = type === "html" || !type ? "md" : "yaml";
+    const initialPath = resolve(snapshotDir, `${spec.alias}.${initialExt}`);
+    result.isNew = !existsSync(initialPath);
 
     let converterName = pickConverter(type, spec, config);
     let converter = getConverter(converterName);
