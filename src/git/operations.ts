@@ -46,7 +46,7 @@ export async function isGitRepo(snapshotDir: string): Promise<boolean> {
 }
 
 export async function gitInit(snapshotDir: string): Promise<void> {
-  const result = await runGit(snapshotDir, ["init"]);
+  const result = await runGit(snapshotDir, ["init", "-b", "main"]);
   if (result.exitCode !== 0) {
     throw new Error(`git init failed: ${result.stderr}`);
   }
@@ -70,13 +70,8 @@ export async function gitAddAll(snapshotDir: string): Promise<void> {
   }
 }
 
-export async function gitDiffCached(
-  snapshotDir: string,
-  paths: string[] = []
-): Promise<string> {
-  const args = ["diff", "--cached", "--word-diff=plain"];
-  if (paths.length > 0) args.push("--", ...paths);
-  const result = await runGit(snapshotDir, args);
+export async function gitDiffCached(snapshotDir: string): Promise<string> {
+  const result = await runGit(snapshotDir, ["diff", "--cached", "--word-diff=plain"]);
   return result.stdout;
 }
 
