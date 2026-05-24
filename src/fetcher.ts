@@ -1,13 +1,21 @@
 import type { FetchResult } from "./types.ts";
 
 const MAX_BODY_SIZE = 5 * 1024 * 1024; // 5MB
+const DEFAULT_USER_AGENT = "urlwatcher/0.0 (+https://github.com/choephix/urlwatcher)";
+
+function getUserAgent(): string {
+  return process.env.URLWATCHER_USER_AGENT || DEFAULT_USER_AGENT;
+}
 
 export async function fetchUrl(url: string, timeout: number): Promise<FetchResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "user-agent": getUserAgent() },
+    });
 
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
